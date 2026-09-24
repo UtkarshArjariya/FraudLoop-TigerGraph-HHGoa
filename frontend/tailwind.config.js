@@ -1,1 +1,16 @@
-export default { content: ['./index.html', './src/**/*.{ts,tsx}'], theme: { extend: { colors: { background: 'var(--bg)', surface: 'var(--surface)', foreground: 'var(--text)', muted: 'var(--muted)', border: 'var(--border)', accent: 'var(--accent)' } } }, plugins: [] };
+export default {
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  theme: {
+    extend: {
+      colors: {
+        background: "var(--bg)",
+        surface: "var(--surface)",
+        foreground: "var(--text)",
+        muted: "var(--muted)",
+        border: "var(--border)",
+        accent: "var(--accent)",
+      },
+    },
+  },
+  plugins: [],
+};
