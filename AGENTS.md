@@ -1,0 +1,160 @@
+# FRAUDLOOP — context for future chats
+
+Last updated: 2026-09-25. This file preserves project decisions and the latest handoff. Read it before making changes, then inspect the working tree and relevant source files. Historical verification below is not a guarantee that external services are still running.
+
+## Goal and user preferences
+
+- Build FRAUDLOOP, a solo submission for the TigerGraph HHGOA Agentic Fraud Investigation hackathon.
+- Priority: **20 valid answer files, then a working end-to-end agent, then UI**. Never sacrifice valid answers for polish.
+- The user explicitly requested a review of all 20 outputs before UI work. That checkpoint has been reached; UI work has not been requested since. Do not infer UI approval from an unrelated maintenance request.
+- Prefer complete, readable implementations and root-cause fixes. Run relevant validation and report commands and outcomes.
+- Preserve existing user changes, `.env`, generated answers, graph data, and embedding checkpoints. Do not print or commit secrets.
+- Update this file after significant changes so the next chat gets current context; keep transient logs and secrets out of it.
+
+## Source of truth and constraints
+
+- `HHGOA_IEEE/README.md` is the grading specification: exact answer JSON, identifiers, R1–R10 policy, approval routes, case-versus-SAR decisions, before/after next best actions, and stopping rules.
+- Dataset inputs are `HHGOA_IEEE/{case_pack,closed_cases_history,transactions,identity}.csv`. Never use original Kaggle fraud labels. Every entity ID emitted in answers must exist in the supplied dataset.
+- All evidence is bounded by the case's `opened_at`. Process cases chronologically; only earlier generated cases may be retrieved as memory. Distinguish those conclusions from confirmed historical bank outcomes.
+- Policy and assessment code own verdicts, probabilities, actions, and approval routes. Gemini only writes guarded prose. Do not add LangGraph or move policy decisions into the LLM.
+- Runtime graph reads/writes must use the official TigerGraph MCP server through an MCP `ClientSession`. Provisioning uses Docker/GSQL. Local fallback must truthfully report `written_to_graph=false`.
+- Bank actions are recommendations: the system has not actually blocked cards, contacted customers, or filed external SARs. Additional customer/step-up/analyst replies are deterministic simulations and must remain disclosed.
+- The bank risk score is not a decision anchor. Correlated signals count once within capped evidence families. `id_15 == 'New'` or a widely shared device profile alone is weak evidence. Do not force a target verdict distribution.
+- There is no merchant ID in the supplied data. Product codes and email domains cannot establish same-merchant recurring charges for R7.
+- Unresolved card groups use internal `unresolved:` keys. Never emit these as authoritative card IDs; cite known customer/transaction IDs instead.
+
+## Environment and commands
+
+- Fedora, Python 3.12 virtual environment. Use `.venv/bin/python`; system Python may differ.
+- TigerGraph Community 4.2.5, Docker container `tg`, graph `FraudGraph`, REST port 9000 and GraphStudio/GSQL port 14240.
+- Configuration keys are documented in `.env.example`: `TG_*`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `USE_LOCAL`, `EMBED_LIMIT`. Read the current configuration through code without exposing values. The example narration model is `gemini-3.8-flash`; live availability has not been established by the saved answer run.
+- Dependencies and pytest configuration are in `pyproject.toml`.
+
+From the repository root:
+
+```bash
+# Validate existing answer files without regenerating them:
+.venv/bin/python -m scripts.validate
+.venv/bin/python -m pytest -q
+git diff --check
+
+# Inspect embedding selection without API or graph calls:
+.venv/bin/python -m scripts.embed_docs --dry-run
+
+# Resume embedding ingestion, if no other ingestion process is running:
+EMBED_LIMIT=1500 .venv/bin/python -m scripts.embed_docs
+
+# Regenerate answers through live MCP; overwrites answer files and graph case records:
+.venv/bin/python -m scripts.run_cases
+
+# Explicit local run, with separate output files; also saves local store memory:
+.venv/bin/python -m scripts.run_cases --local --no-llm \
+  --output data/runs/local-cases --traces data/runs/local-validation
+```
+
+For a fresh environment only, run `.venv/bin/python -m scripts.prep_data --source HHGOA_IEEE`, then `.venv/bin/python -m scripts.setup_graph`. Existing `FraudGraph` causes setup to stop to preserve data. `--queries-only` recompiles queries when deliberately needed; do not routinely rerun provisioning.
+
+## Implementation map
+
+- `scripts/prep_data.py`, `agent/store.py`: chunked CSV processing and `TransactionStore`. Uses 27 transaction columns, not the full 397-column dataset. Prepared subset: 205,992 transactions and 5,565 historical closed cases. Artifacts: `data/graph/*.csv`, `data/transaction_store.pkl`.
+- Identity conventions: customer UID is `card1_addr1_floor(TransactionDT/86400-D1)`; device profile is `DeviceInfo|id_30|id_31|id_33`. Suppress the empty `|||` profile. Real card IDs come from explicit benchmark/history transaction anchors, not guesses.
+- `gsql/01_schema.gsql`: Customer, Card, Txn, DeviceProfile, EmailDomain, BillingRegion, ClosedCase, DocChunk, FraudCase; directed edges with reverse edges; 768-dimensional cosine vector attributes on ClosedCase, DocChunk, FraudCase.
+- `gsql/02_load.gsql`, `scripts/setup_graph.py`: Docker CSV loading and graph provisioning. Container data directory: `/home/tigergraph/mydata`; GSQL executable: `/home/tigergraph/tigergraph/app/cmd/gsql`.
+- `gsql/03_queries.gsql`: 11 queries: `card_window`, `card_baseline`, `device_ring`, `region_cluster`, `prior_cases`, `case_library`, `similar_cases`, `write_case`, `get_documents`, `write_document`, `tg_wcc`.
+- `agent/mcp_client.py`: launches `python -m tigergraph_mcp.main`, discovers tools, parses MCP results, normalizes query output, counts calls, uploads vectors. `vector_similarities` uses actual returned cosine distances, not hit ordering, and excludes graph fallback scores.
+- `agent/local_backend.py`: pandas implementation of the same query interface, strict temporal filtering, local memory, vector and graph retrieval. `USE_LOCAL=1` enables it.
+- `agent/policy.py`: pure policy functions, recommendations, approval routes, stopping rules.
+- `agent/assess.py`: capped independent evidence-family log odds, historical outcome bias correction, top-five precedent ranking, graph-expanded episode scope, exposure, and deterministic simulated replies. Probabilities are evidence heuristics, not a trained calibration model.
+- `agent/investigate.py`: `TRIGGER → GATHER → ASSESS → INITIAL_NBA → REQUEST_EVIDENCE → REASSESS → FINAL_NBA → SAR → WRITE_BACK → ANSWER`, with conditional stopping. Recomputes baselines before expanded episodes where needed. Writes full answer payloads to FraudCase vertices using original HHG IDs.
+- `agent/llm.py`: `google-genai`, high thinking, structured JSON, no temperature/top-p/top-k, two attempts and template fallback. Validates citations, unchanged decisions, simulation disclosure, and narrative lengths; counts tokens including thoughts and records latency.
+- `agent/answer.py`: strict Pydantic schema plus dataset-ID, temporal, exposure, policy, and route validation.
+- `scripts/run_cases.py`: chronological investigations, atomic `cases/<case_id>.json`, traces and summary under `data/runs/`. Supports `--case-id HHG-001` and `--no-llm`.
+- `scripts/validate.py`: validates the 20 benchmark answer files.
+
+## Earlier work: embedding reliability and retrieval (superseded where noted below)
+
+The latest code changes implement all five requested embedding/retrieval fixes:
+
+1. Full exception status and message are printed, with API keys redacted.
+2. Default batches of 20, four seconds between API batches. On 429/`RESOURCE_EXHAUSTED`, honor `retryDelay` when present; otherwise retry after 30, 60, 120 seconds. On 400, retry individual texts. Skip empty text, truncate embedding inputs to 2,000 characters, and skip individual texts that still fail with 400. Preserve full document text in the graph.
+3. Resume from `data/embedded_ids.txt`, checkpointed atomically only after successful graph vector upload. Cache generated vectors before uploading so an upload failure does not require paying to embed again. Local mode uses a separate checkpoint.
+4. Embed the 12 DocChunks first, then historical cases linked to benchmark cards/customers/devices/regions, then a stratified sample by pattern and outcome. `EMBED_LIMIT` defaults to 1,500 total selected IDs, including documents and already completed IDs; it is not a fresh allowance per restart. `--limit` overrides it.
+5. Missing vectors do not exclude candidates: shared card/device/region and same-pattern evidence support graph fallback, with the retrieval method labeled in evidence and traces. Native GSQL `similar_cases` remains vector search; live assessment merges its hits with case-library/graph candidates. Local retrieval supports the same partial-index behavior.
+
+Relevant files: `scripts/embed_docs.py`, `agent/embeddings.py`, `agent/local_backend.py`, `agent/assess.py`, `agent/mcp_client.py`, `agent/investigate.py`, `.env.example`, `.gitignore`; regression tests in `tests/test_embed_docs.py`, `tests/test_retrieval.py`, and `tests/test_local_backend.py`.
+
+Embedding state is changing: all 12 DocChunks were embedded and a repeat run made zero embedding/graph calls. During this handoff, checkpoint counts increased from 180 to 213 IDs (12 documents plus 201 closed cases), indicating ingestion is progressing elsewhere. **Check for an existing ingestion process before starting another.** Read the current checkpoint and cache instead of treating these counts as final. `data/embeddings/status.json` can describe the last finished run while a newer run is in progress.
+
+Cache: `data/embeddings/gemini-embedding-001-768.json`. Model: `gemini-embedding-001`, 768 dimensions, L2 normalized. Checkpoint/cache/run artifacts are gitignored. A full 1,500-ID ingestion has not been verified complete. Checkpoint IDs refer to uploads to the existing graph; after a graph rebuild, reconcile the checkpoint before resuming, since it is not a live graph inventory.
+
+## Verification and current stopping point
+
+- All 20 files `cases/HHG-001.json` through `cases/HHG-020.json` exist. Validation was rerun successfully on 2026-09-24: schema, IDs, exposure, chronology, routes, and policy checks passed.
+- Saved results: **9 fraud, 8 legitimate, 3 uncertain; 2 SAR recommendations**. All 20 report graph write-back and were previously compared with live stored graph payloads. This handoff did not rerun that live comparison.
+- Saved answers predate the embedding/retrieval fixes. They used template narration; do not claim they demonstrate live Gemini narration or the new retrieval behavior. They have not been regenerated after those fixes.
+- The latest implementation test run passed **104 tests**. This was verified during the embedding fix, not rerun for this documentation-only handoff.
+- Historical live graph verification: all 11 queries installed; Card–Device WCC converged across 13,831 vertices into 4,954 components. Evidence is in `data/runs/graph_smoke.json`, `data/runs/final_graph_verification.json`, and adjacent logs. Recheck service health when needed.
+- `docs/answer-review.md` contains the 20-answer review. Its statements that the Gemini key is a placeholder, that no embeddings exist, and that the suite has 86 tests are historical and superseded by this handoff. Do not copy those as current facts.
+- Watch HHG-006 (four near-$500 purchases; $1,906.07), HHG-014 (26 transactions, 20 card groups including nine unresolved groups; $3,778.14), and uncertain HHG-010/015/020 when assessing regressions. HHG-003/018 have customer denials without an invented fraud typology.
+- Docker Desktop previously exposed only about 3.647 GiB RAM despite 16 GiB on the host. GSQL compilation caused OOM restarts. Avoid unnecessary compilation, especially alongside live queries. Fresh provisioning compiles before loading.
+- In the previous execution environment, sandboxed `asyncio.to_thread` shutdown could hang; the complete suite passed outside that restriction. Distinguish environment limitations from application failures.
+- **No UI or root project README exists yet.** After the user requests continuation beyond answer review, the original remaining scope is a Streamlit `ui/app.py` (queue, evidence, before/after actions, SAR, role-based approval view, pyvis neighborhood, live run), followed by a README with architecture, setup, required-component coverage, and simulation disclosures.
+- At this handoff the embedding changes and new tests are uncommitted working-tree changes. Inspect `git status` on the next chat; do not discard them or assume they are already committed.
+
+
+## Latest changes: model fallback and index ownership (2026-09-25)
+
+- Narration now uses `GEMINI_MODEL_CHAIN`, intersected with passing text IDs in
+  `MODEL_CHECK_RESULTS` (`data/model_checks.json`). Defaults remain
+  `gemini-3.8-flash,gemini-3.7-flash,gemini-3.5-flash-lite`. The user's later quota
+  screenshot requested an expanded chain and live 3.8: `.env` and `.env.example`
+  now put 3.8 first, 3.6 next, then Lite models and other requested Flash models.
+  The key and other existing configuration were preserved.
+- Each model gets two retries on 429/RESOURCE_EXHAUSTED or 503/UNAVAILABLE;
+  RetryInfo overrides 2s/5s. A 429 opens a process-wide 60s circuit for subsequent
+  calls. RPM pacing matches the screenshot (Flash 5, 3.1/3.5 Lite 15, 2.5 Lite 10).
+  Missing checked models or exhausted attempts return guarded templates.
+- Attempts log the actual model, attempts, outcome/status and tokens including
+  thoughts. Traces retain `llm_calls` and `llm_model_used`; newly generated answer
+  files include `metadata.llm_model_used`. Old answers without metadata still
+  validate. Existing case JSON files were not edited or regenerated.
+- Fixed a live 400: Gemini rejected `additional_properties` generated from
+  Pydantic `extra=forbid`. Omit it from the wire schema, retain strict local
+  validation, and align the prompt with empty-string fields, sentence limits,
+  cited IDs and simulated-reply disclosures.
+- `GeminiEmbedder` and CPU `LocalEmbedder` implement 768-dimensional normalized
+  embeddings. Fastembed 0.8.1 is installed; BGE base en v1.5 document/query output
+  was verified with real weights. `EMBED_PROVIDER=auto` switches to local only
+  when the first batch is quota-limited before any vector is cached/uploaded.
+  A quota error after partial progress stops; it never changes model mid-index.
+- The supplied embedding-2 checks reported batch20=1. Those models are excluded
+  because the interface requires one vector per input. `check_models` now saves
+  the allowlist and enforces dimension/count; `--models` checks selected text
+  models without spending embedding quota.
+- `data/embedding_index.json` pins live index model/dimension/state. Local graph
+  mode uses a separate manifest. Every vector upsert includes `embed_model`;
+  query embeddings use the pinned provider, and mismatched/unlabelled candidates
+  use graph fallback. A file lock prevents ingestion/rebuild/query races.
+- Existing unlabelled vectors are preserved but not used for vector retrieval
+  until an explicit rebuild. `--rebuild --provider local` resets all vector
+  attributes, including FraudCase and records outside EMBED_LIMIT, while keeping
+  business vertices/edges/answers. `scripts.migrate_embeddings` provisions labels
+  and query updates through Docker/GSQL; runtime graph traffic still uses MCP.
+  Failed resets leave the manifest `resetting`, disabling vector operations.
+- **No live graph migration or vector rebuild was performed.** Updated GSQL was
+  checked by regression tests but not compiled against the running server. The
+  current index/checkpoint/cache remain the operator's data. A dry-run observed
+  832 checkpoint IDs; this is not a permanent count or a live graph inventory.
+- Latest verification: 121 tests passed; all 20 saved answers validate; diff
+  whitespace check and pip dependency checks passed. Isolated local HHG-001 ran
+  end to end with template metadata and graph=false, using a temporary store.
+  Real CPU vectors had 768 dimensions and unit norms.
+- Live text checks: 3.8 returned 503 UNAVAILABLE; 3.7 returned 504; 3.6 passed a
+  simple probe. Do not claim live 3.8 narration worked. A corrected synthetic
+  guarded narration succeeded on 3.5 Flash Lite in one attempt: 691 input,
+  1126 output (1063 thoughts), 1817 total tokens, about 13.65s. Metrics are under
+  `data/runs/narration_fallback_smoke.json`. Availability can change.
+- Automatic approval review rejected exporting saved HHG-001/SAR evidence for
+  the live smoke test; only synthetic evidence was sent for the successful test.
+- Exact setup, probe, rebuild/resume and regeneration commands, with side
+  effects explained, are in `docs/model-fallback.md`. No UI work was done.
