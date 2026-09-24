@@ -154,7 +154,13 @@ class SAR(StrictModel):
         return self
 
 
+class AnswerMetadata(StrictModel):
+    llm_model_used: Text = "template"
+    llm_attempts: Count = 0
+
+
 class Answer(StrictModel):
+    metadata: AnswerMetadata = Field(default_factory=AnswerMetadata)
     case_id: Text
     case: InvestigationCase
     evidence_requests: list[EvidenceRequest]
