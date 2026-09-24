@@ -72,17 +72,117 @@ def test_migration_preserves_legacy_vectors_and_adds_all_model_attributes():
     assert 'f.opened_epoch < as_of' in queries and 'covered_ids.contains(c.case_id)' in queries
 
 
-def test_gemma_cpu_uses_exact_model_card_prompts(monkeypatch):
-    import sys
-    fake = MagicMock()
-    fake.SentenceTransformer.return_value.encode.return_value = [[2.] + [0.] * 767]
-    monkeypatch.setitem(sys.modules, 'sentence_transformers', fake)
+def test_gemma_cpu_uses_exact_model_card_prompts(gemma_model):
     provider = emb.LocalGemmaEmbedder()
     assert provider.embed(['doc'])[0][0] == 1
     assert provider.embed(['question'], query=True)[0][0] == 1
-    fake.SentenceTransformer.assert_called_once_with(emb.GEMMA_MODEL, device='cpu', trust_remote_code=False)
-    assert [c.kwargs['prompt'] for c in fake.SentenceTransformer.return_value.encode.call_args_list] == [
+    gemma_model.factory.assert_called_once_with(emb.GEMMA_MODEL, device='cpu', trust_remote_code=False)
+    assert [c.kwargs['prompt'] for c in gemma_model.model.encode.call_args_list] == [
         'title: none | text: ', 'task: search result | query: ']
+
+
+@pytest.mark.parametrize('requested,available,device,batch_size', [
+    (None, False, 'cpu', 16), (None, True, 'cuda', 64),
+    ('auto', False, 'cpu', 16), ('auto', True, 'cuda', 64),
+    ('cpu', True, 'cpu', 16), ('cuda', True, 'cuda', 64),
+    ('cuda', False, 'cpu', 16),
+])
+def test_gemma_selects_device_and_precision(monkeypatch, gemma_model, requested, available, device, batch_size):
+    if requested is None:
+        monkeypatch.delenv('EMBED_DEVICE')
+    else:
+        monkeypatch.setenv('EMBED_DEVICE', requested)
+    gemma_model.torch.cuda.is_available.return_value = available
+    provider = emb.LocalGemmaEmbedder()
+    assert provider.embed(['document'])[0][0] == 1
+    gemma_model.factory.assert_called_once_with(emb.GEMMA_MODEL, device=device, trust_remote_code=False)
+    assert gemma_model.model.encode.call_args.kwargs['batch_size'] == batch_size
+    assert provider.runtime == {'device': device, 'batch_size': batch_size,
+                                'precision': 'float16' if device == 'cuda' else 'float32'}
+    assert gemma_model.model.half.call_count == int(device == 'cuda')
+    assert gemma_model.model.float.call_count == int(device == 'cpu')
+    if requested == 'cpu':
+        gemma_model.torch.cuda.is_available.assert_not_called()
+
+
+def test_gemma_invalid_device_fails_before_model_loading(monkeypatch, gemma_model):
+    monkeypatch.setenv('EMBED_DEVICE', 'cdua')
+    with pytest.raises(ValueError, match='EMBED_DEVICE'):
+        emb.LocalGemmaEmbedder().embed(['document'])
+    gemma_model.factory.assert_not_called()
+
+
+def test_empty_gemma_input_needs_no_optional_dependencies(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, 'torch', None)
+    monkeypatch.setitem(sys.modules, 'sentence_transformers', None)
+    provider = emb.LocalGemmaEmbedder()
+    assert provider.embed([]) == [] and provider.runtime == {}
+
+
+def test_gemma_cuda_oom_retries_half_batch_and_retains_it(gemma_model, caplog):
+    gemma_model.torch.cuda.is_available.return_value = True
+    texts = ['one', 'two']
+    gemma_model.model.encode.side_effect = [
+        gemma_model.torch.cuda.OutOfMemoryError('allocation failed'),
+        gemma_model.vectors(texts), gemma_model.vectors(['query'])]
+    provider = emb.LocalGemmaEmbedder()
+    assert len(provider.embed(texts)) == 2
+    assert len(provider.embed(['query'], query=True)) == 1
+    calls = gemma_model.model.encode.call_args_list
+    assert [c.kwargs['batch_size'] for c in calls] == [64, 32, 32]
+    assert [c.args[0] for c in calls] == [texts, texts, ['query']]
+    assert provider.runtime['device'] == 'cuda' and provider.runtime['batch_size'] == 32
+    gemma_model.model.to.assert_not_called()
+    gemma_model.torch.cuda.empty_cache.assert_called_once()
+    assert 'retrying with batch_size=32' in caplog.text
+
+
+def test_gemma_repeated_cuda_oom_moves_to_cpu_before_float_and_stays_there(gemma_model, caplog):
+    gemma_model.torch.cuda.is_available.return_value = True
+    gemma_model.model.encode.side_effect = [
+        gemma_model.torch.cuda.OutOfMemoryError('allocation failed'),
+        RuntimeError('CUDA out of memory. Tried to allocate'),
+        gemma_model.vectors(['doc']), gemma_model.vectors(['query'])]
+    provider = emb.LocalGemmaEmbedder()
+    provider.embed(['doc'])
+    provider.embed(['query'], query=True)
+    assert [c.kwargs['batch_size'] for c in gemma_model.model.encode.call_args_list] == [64, 32, 16, 16]
+    names = [c[0] for c in gemma_model.model.method_calls]
+    assert names.index('to') < names.index('float')
+    gemma_model.model.to.assert_called_once_with('cpu')
+    assert provider.runtime == {'device': 'cpu', 'batch_size': 16, 'precision': 'float32'}
+    assert gemma_model.torch.cuda.empty_cache.call_count == 2
+    assert 'using CPU' in caplog.text
+
+
+@pytest.mark.parametrize('stage', ['load', 'half'])
+def test_gemma_cuda_initialization_oom_can_fall_back_to_cpu(gemma_model, stage):
+    gemma_model.torch.cuda.is_available.return_value = True
+    errors = [gemma_model.torch.cuda.OutOfMemoryError('allocation failed') for _ in range(2)]
+    if stage == 'load':
+        gemma_model.factory.side_effect = errors + [gemma_model.model]
+    else:
+        gemma_model.model.half.side_effect = errors
+    provider = emb.LocalGemmaEmbedder()
+    assert provider.embed(['doc'])[0][0] == 1
+    assert [c.kwargs['device'] for c in gemma_model.factory.call_args_list] == ['cuda', 'cuda', 'cpu']
+    assert provider.runtime['device'] == 'cpu'
+
+
+@pytest.mark.parametrize('available,error', [
+    (True, RuntimeError('CUDA invalid device function')),
+    (True, ValueError('invalid input')),
+    (False, RuntimeError('CPU out of memory')),
+])
+def test_gemma_does_not_retry_unrelated_or_cpu_errors(gemma_model, available, error):
+    gemma_model.torch.cuda.is_available.return_value = available
+    gemma_model.model.encode.side_effect = error
+    provider = emb.LocalGemmaEmbedder()
+    with pytest.raises(type(error), match=str(error)):
+        provider.embed(['doc'])
+    assert gemma_model.model.encode.call_count == 1 and provider.runtime == {}
+    gemma_model.torch.cuda.empty_cache.assert_not_called()
 
 
 def test_embedding_two_never_merges_documents():

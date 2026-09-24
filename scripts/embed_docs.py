@@ -19,7 +19,7 @@ import numpy as np
 
 from agent.embeddings import (GeminiEmbedder, LocalGemmaEmbedder, ModelMismatch, provider_for,
     index_lock, register_index, selected_specs, checkpoint_path, covered_ids, CACHE_DIR,
-    embed_vectors)
+    embed_vectors, record_index_runtime)
 from agent.model_registry import discover
 from agent.service_errors import exception_message, status_code, retry_delay
 from agent.mcp_client import GraphClient
@@ -244,6 +244,10 @@ async def ingest_index(args, spec, store, graph=None):
             pending.append(EmbedRow(row.vertex_type, row.vertex_id, text[:MAX_TEXT_CHARS], row.attributes, row.priority))
         # Gemini 2 multimodal semantics require singleton requests/checkpoints.
         batch_size = 1 if spec.provider == "gemini" and spec.key != "gem001" else args.batch_size
+        if spec.provider == "gemma":
+            # Feed enough texts for CUDA's 64-text batches. The embedder splits
+            # these into 16-text CPU batches or smaller batches after CUDA OOM.
+            batch_size = LocalGemmaEmbedder.CUDA_BATCH_SIZE
         first_request = True
         for vertex_type in ("DocChunk", "ClosedCase"):
             typed = [r for r in pending if r.vertex_type == vertex_type]
@@ -259,6 +263,12 @@ async def ingest_index(args, spec, store, graph=None):
                     await asyncio.sleep(BATCH_DELAY)
                 first_request = False
                 async for pairs in generate_batches(missing, status, provider):
+                    runtime = getattr(provider, "runtime", {})
+                    if runtime and any(status.get(key) != value for key, value in runtime.items()):
+                        record_index_runtime(spec, runtime, local)
+                        status.update(runtime)
+                        print(f"{spec.key}: device={runtime['device']} batch_size={runtime['batch_size']} "
+                              f"precision={runtime['precision']}", flush=True)
                     await commit(pairs)
     except Exception as exc:
         status["aborted"] = True
@@ -321,7 +331,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=Path("HHGOA_IEEE/README.md"))
     parser.add_argument("--store", type=Path, default=Path("data/transaction_store.pkl"))
-    parser.add_argument("--batch-size", type=int, default=20)
+    parser.add_argument("--batch-size", type=int, default=20,
+                        help="BGE/Gemini 001 group size (1-20); Gemma batches follow EMBED_DEVICE, Gemini 2 uses 1")
     parser.add_argument("--limit", type=int, help="Per-model target size; defaults to EMBED_LIMIT for Gemini and the full corpus locally")
     parser.add_argument("--dry-run", action="store_true", help="No API, graph, or file writes")
     parser.add_argument("--local", action="store_true", help="Use a separate local graph backend/checkpoint")

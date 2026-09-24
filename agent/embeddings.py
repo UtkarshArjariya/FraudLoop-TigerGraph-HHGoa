@@ -5,8 +5,10 @@ import asyncio
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import fcntl
+import gc
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Protocol
@@ -26,6 +28,7 @@ LEGACY_CHECKPOINT = Path("data/embedded_ids.txt")
 CACHE_DIR = Path("data/embeddings")
 LOCAL_MODEL = "BAAI/bge-base-en-v1.5"
 GEMMA_MODEL = "google/embeddinggemma-300m"
+logger = logging.getLogger(__name__)
 
 
 class ModelMismatch(RuntimeError):
@@ -118,22 +121,78 @@ class GeminiEmbedder:
 class LocalGemmaEmbedder:
     model_id = GEMMA_MODEL
     dim = 768
+    CUDA_BATCH_SIZE = 64
+    CPU_BATCH_SIZE = 16
     # Model card: retrieval query and title-less retrieval document prompts.
     QUERY_PROMPT = "task: search result | query: "
     DOCUMENT_PROMPT = "title: none | text: "
 
     def __init__(self):
         self._model = None
+        self.device = None
+        self.batch_size = None
+        # Only successful encodes establish the device actually used.
+        self.runtime = {}
+
+    def _load_model(self):
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            model = SentenceTransformer(self.model_id, device=self.device, trust_remote_code=False)
+            if self.device == "cuda":
+                model.half()
+            else:
+                model.float()
+            self._model = model
 
     def embed(self, texts, *, query=False):
         if not texts:
             return []
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self.model_id, device="cpu", trust_remote_code=False)
-        values = self._model.encode(texts, prompt=self.QUERY_PROMPT if query else self.DOCUMENT_PROMPT,
-                                    normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
-        return normalize(values, len(texts))
+        # Keep optional imports lazy: dry runs and cached-only ingestion work
+        # without torch, CUDA initialization, or model downloads.
+        import torch
+        if self.device is None:
+            requested = os.getenv("EMBED_DEVICE", "auto").strip().lower()
+            if requested not in {"auto", "cuda", "cpu"}:
+                raise ValueError("EMBED_DEVICE must be cuda, cpu, or auto")
+            self.device = "cuda" if requested != "cpu" and torch.cuda.is_available() else "cpu"
+            self.batch_size = self.CUDA_BATCH_SIZE if self.device == "cuda" else self.CPU_BATCH_SIZE
+            if requested == "cuda" and self.device == "cpu":
+                logger.warning("EmbeddingGemma: CUDA unavailable; using CPU (batch_size=%d).", self.batch_size)
+        retried_cuda = False
+        while True:
+            try:
+                self._load_model()
+                values = self._model.encode(
+                    texts, prompt=self.QUERY_PROMPT if query else self.DOCUMENT_PROMPT,
+                    batch_size=self.batch_size, normalize_embeddings=True,
+                    convert_to_numpy=True, show_progress_bar=False)
+                vectors = normalize(values, len(texts))
+                self.runtime = {"device": self.device, "batch_size": self.batch_size,
+                                "precision": "float16" if self.device == "cuda" else "float32"}
+                return vectors
+            except Exception as exc:
+                cuda_oom = isinstance(exc, torch.cuda.OutOfMemoryError) or (
+                    isinstance(exc, RuntimeError) and "cuda" in str(exc).lower()
+                    and "out of memory" in str(exc).lower())
+                if self.device != "cuda" or not cuda_oom:
+                    raise
+            # Leave the except block first so its traceback releases temporary
+            # GPU tensors before collecting them and clearing the CUDA cache.
+            if not retried_cuda and self.batch_size > 1:
+                self.batch_size = max(1, self.batch_size // 2)
+                retried_cuda = True
+                logger.warning("EmbeddingGemma: CUDA out of memory; retrying with batch_size=%d.", self.batch_size)
+            else:
+                logger.warning("EmbeddingGemma: CUDA out of memory after retry; using CPU (batch_size=%d).",
+                               self.CPU_BATCH_SIZE)
+                if self._model is not None:
+                    # Move before converting: fp32 weights must not allocate on
+                    # the already exhausted GPU.
+                    self._model.to("cpu")
+                    self._model.float()
+                self.device, self.batch_size = "cpu", self.CPU_BATCH_SIZE
+            gc.collect()
+            torch.cuda.empty_cache()
 
 
 class LocalBgeEmbedder:
@@ -256,6 +315,20 @@ def register_index(spec, local=False, **updates):
     entry.update(updates)
     atomic_json(index_path(local), manifest)
     return entry
+
+
+def record_index_runtime(spec, runtime, local=False):
+    """Record successful ingestion under the caller's exclusive index lock."""
+    register_index(spec, local, **runtime)
+    # Preserve legacy ownership/recovery fields. Multiple model runtimes cannot
+    # truthfully be represented by one top-level device on the old manifest.
+    path = LEGACY_INDEX_PATH.with_name(LEGACY_INDEX_PATH.stem + ".local.json") if local else LEGACY_INDEX_PATH
+    try:
+        legacy = json.loads(path.read_text())
+    except FileNotFoundError:
+        legacy = {}
+    legacy.setdefault("runtime", {})[spec.key] = {"model_id": spec.model_id, **runtime}
+    atomic_json(path, legacy)
 
 
 def require_index(model_id, attribute, local=False):

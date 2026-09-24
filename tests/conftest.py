@@ -23,3 +23,26 @@ def isolated_model_state(tmp_path, monkeypatch):
     yield
     clients._client.cache_clear()
     emb._PROVIDERS.clear()
+
+
+@pytest.fixture
+def gemma_model(monkeypatch):
+    """Exercise device selection/recovery without torch, weights, or a GPU."""
+    import sys
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    class CudaOutOfMemoryError(RuntimeError):
+        pass
+
+    torch = SimpleNamespace(cuda=SimpleNamespace(
+        is_available=MagicMock(return_value=False),
+        OutOfMemoryError=CudaOutOfMemoryError, empty_cache=MagicMock()))
+    transformers = MagicMock()
+    model = transformers.SentenceTransformer.return_value
+    vectors = lambda texts, **kwargs: [[float(i + 1)] + [0.] * 767 for i in range(len(texts))]
+    model.encode.side_effect = vectors
+    monkeypatch.setenv('EMBED_DEVICE', 'auto')
+    monkeypatch.setitem(sys.modules, 'torch', torch)
+    monkeypatch.setitem(sys.modules, 'sentence_transformers', transformers)
+    return SimpleNamespace(torch=torch, factory=transformers.SentenceTransformer, model=model, vectors=vectors)

@@ -44,7 +44,7 @@ Each attribute is a 768-dimensional cosine HNSW index on `ClosedCase`, `DocChunk
 
 The existing `embedding` attribute and `data/embedded_ids.txt` are retained unchanged. Gemini 001 imports those checkpoint IDs into `data/checkpoints/gemini-embedding-001.txt`. Other models have their own files under `data/checkpoints/`; local graph mode uses a separate subdirectory. Checkpoints advance only after successful persistence. Cached generated vectors survive failed uploads. The old destructive `--rebuild` workflow is removed.
 
-EmbeddingGemma uses `task: search result | query: ` for queries and `title: none | text: ` for documents, on CPU. [Google's prompt documentation](https://ai.google.dev/gemma/docs/embeddinggemma/inference-embeddinggemma-with-sentence-transformers) describes the retrieval prompts. Embedding 2 uses one document per request to avoid combining multiple documents into a single multimodal embedding.
+EmbeddingGemma uses `task: search result | query: ` for queries and `title: none | text: ` for documents. [Google's prompt documentation](https://ai.google.dev/gemma/docs/embeddinggemma/inference-embeddinggemma-with-sentence-transformers) describes the retrieval prompts. `EMBED_DEVICE=auto` (default) selects CUDA when `torch.cuda.is_available()`; `cpu` forces CPU and `cuda` requests CUDA with CPU fallback when unavailable. CUDA uses fp16 weights and batches of 64; CPU uses fp32 and batches of 16. A CUDA out-of-memory error retries once at half the current batch size, then falls back to CPU if that retry also runs out of memory. The reduced batch size or CPU fallback persists for later calls. Gemma ingestion feeds groups of up to 64 texts independently of `--batch-size`; the embedder splits them for its current device. Embedding 2 uses one document per request to avoid combining multiple documents into a single multimodal embedding.
 
 ```bash
 # Add attributes and install per-index queries; preserve all business data/vectors.
@@ -67,7 +67,7 @@ EmbeddingGemma uses `task: search result | query: ` for queries and `title: none
 
 Gemini defaults to `EMBED_LIMIT=1500` **per model**, including already completed IDs. Local models default to all 5,565 closed cases plus the policy chunks. An explicit `--limit` overrides either default. Ordering remains documents, benchmark-linked history, then a stratified sample. Index failures do not stop later providers, but the command exits nonzero when any index remains interrupted so partial completion is visible.
 
-Status reports durable checkpoint coverage, not a live graph inventory. After an external graph replacement, reconcile checkpoints before resuming. Migration never rebuilds the graph or deletes vectors.
+Status reports durable checkpoint coverage, not a live graph inventory. `embed_status` also displays the last successful Gemma ingestion device (`unknown` until recorded). Device, batch size and precision are saved in the Gemma entry of `data/embedding_indexes.json`, the per-run status, and `data/embedding_index.json` under `runtime.gemma`, preserving legacy recovery fields. Local graph mode writes separate `.local.json` manifests. Cached-only runs leave recorded device metadata unchanged. After an external graph replacement, reconcile checkpoints before resuming. Migration never rebuilds the graph or deletes vectors.
 
 ## Retrieval and evidence viewer
 
@@ -93,7 +93,7 @@ For a fresh environment only, prepare the supplied data and provision a new grap
 git diff --check
 ```
 
-Tests mock service quotas, credential separation, discovery, cross-index writes, Embedding 2 batching, CPU prompts, checkpoint recovery, temporal filtering, and RRF ordering. Live service availability, gated model access, and deployment resources still require live checks.
+Tests mock service quotas, credential separation, discovery, cross-index writes, Embedding 2 batching, Gemma device selection and CUDA memory recovery, retrieval prompts, checkpoint recovery, temporal filtering, and RRF ordering. Live service availability, gated model access, and deployment resources still require live checks.
 
 If a previous reset already removed the legacy vector attribute, migration marks its checkpoint as requiring recovery. Recreate the attribute with the additive migration, then restore available cached vectors without API requests:
 

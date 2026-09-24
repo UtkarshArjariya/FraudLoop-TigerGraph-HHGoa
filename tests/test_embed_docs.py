@@ -261,3 +261,69 @@ def test_missing_legacy_attribute_restores_cached_vectors_without_api_calls(envi
     assert embeddings.covered_ids(spec) == {'D0'}
     assert embeddings.LEGACY_CHECKPOINT.read_text() == 'D0\n'
     assert (module.CACHE_DIR / 'gemini-embedding-001-768.json').read_bytes() == cache_before
+
+
+@pytest.mark.parametrize('local', [False, True])
+def test_gemma_ingestion_records_actual_fallback_device_without_changing_legacy_state(environment, gemma_model, local, capsys):
+    from scripts import embed_status
+
+    e = environment
+    e.args.provider, e.args.limit, e.args.local = 'gemma', 70, local
+    e.docs[:] = [{'doc_id': f'D{i}', 'source_id': 'README', 'text_data': f'text {i}'} for i in range(70)]
+    original = {'model_id': embeddings.LOCAL_MODEL, 'state': 'resetting', 'dim': 768}
+    embeddings.LEGACY_INDEX_PATH.write_text(json.dumps(original))
+    gemma_model.torch.cuda.is_available.return_value = True
+    attempts = []
+
+    def encode(texts, **kwargs):
+        attempts.append(len(texts))
+        if len(attempts) <= 2:
+            raise gemma_model.torch.cuda.OutOfMemoryError('allocation failed')
+        return gemma_model.vectors(texts)
+
+    gemma_model.model.encode.side_effect = encode
+    result = asyncio.run(module.run(e.args))
+    assert len(result['indexes']) == 1 and not result['aborted']
+    status = result['indexes'][0]
+    assert attempts == [64, 64, 64, 6]
+    assert status['completed_selected'] == 70
+    assert [c.kwargs['batch_size'] for c in gemma_model.model.encode.call_args_list] == [64, 32, 16, 16]
+    runtime = {'device': 'cpu', 'batch_size': 16, 'precision': 'float32'}
+    assert all(status[k] == value for k, value in runtime.items())
+    saved = embeddings.read_indexes(local)['indexes']['gemma']
+    assert all(saved[k] == value for k, value in runtime.items())
+    legacy_path = embeddings.LEGACY_INDEX_PATH
+    if local:
+        assert json.loads(legacy_path.read_text()) == original
+        legacy_path = legacy_path.with_name(legacy_path.stem + '.local.json')
+    legacy = json.loads(legacy_path.read_text())
+    if not local:
+        assert all(legacy[k] == value for k, value in original.items())
+    assert legacy['runtime']['gemma'] == {'model_id': embeddings.GEMMA_MODEL, **runtime}
+    on_disk = json.loads((module.CACHE_DIR / ('gemma.local.status.json' if local else 'gemma.status.json')).read_text())
+    assert on_disk['device'] == 'cpu'
+    assert 'device=cpu batch_size=16 precision=float32' in capsys.readouterr().out
+    e.monkeypatch.setattr(embed_status, 'documents', lambda _: e.docs)
+    rows = {r['index']: r for r in embed_status.coverage_rows(e.store, local=local)}
+    assert rows['gemma']['device'] == 'cpu' and rows['gemma']['vectors'] == 70
+    assert rows['gem001']['device'] == 'unknown'
+    # An already-complete cached-only run neither loads weights nor rewrites
+    # runtime metadata as though the device had been used again.
+    before = legacy_path.read_bytes()
+    gemma_model.model.encode.reset_mock()
+    e.args.cached_only = True
+    asyncio.run(module.run(e.args))
+    gemma_model.model.encode.assert_not_called()
+    assert legacy_path.read_bytes() == before
+
+
+def test_gemma_dry_run_and_cached_only_need_no_device_initialization(environment, gemma_model):
+    e = environment
+    e.args.provider, e.args.dry_run = 'gemma', True
+    asyncio.run(module.run(e.args))
+    e.args.dry_run, e.args.cached_only = False, True
+    result = asyncio.run(module.run(e.args))
+    assert not result['aborted'] and result['indexes'][0]['newly_completed'] == 0
+    gemma_model.torch.cuda.is_available.assert_not_called()
+    gemma_model.factory.assert_not_called()
+    assert not embeddings.LEGACY_INDEX_PATH.exists()
