@@ -66,8 +66,12 @@ class QuotaState:
             return {}
 
     def remaining(self, model):
-        entry = self._read().get(self.scope, {}).get(model, self._memory.get(model, {}))
-        return max(0, float(entry.get("until", 0)) - self.clock())
+        scoped = self._read().get(self.scope, {})
+        entry = scoped.get(model, self._memory.get(model, {})) if isinstance(scoped, dict) else self._memory.get(model, {})
+        try:
+            return max(0, float(entry.get("until", 0)) - self.clock())
+        except (TypeError, ValueError, AttributeError):
+            return 0
 
     def record(self, model, exc):
         ids = quota_ids(exc)
