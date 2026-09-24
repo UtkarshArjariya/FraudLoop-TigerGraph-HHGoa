@@ -132,6 +132,10 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
             "graph", "query:case_library", [row["case_id"] for row in earlier_memory]))
     if not documents:
         trace["warnings"].append("No graph policy documents were returned; using the versioned dataset policy encoded in code.")
+    if documents:
+        initial.evidence.append(evidence(
+            "Retrieved policy chunks: " + "; ".join(f"{doc['doc_id']} ({doc.get('match_label', 'policy text')}; RRF={doc.get('fused_score', 0):.6f})" for doc in documents[:12]),
+            "document", "retrieval:policy_chunks", []))
     trace["retrieved_document_ids"] = [doc.get("doc_id", "") for doc in documents]
     trace["retrieval_methods"] = {row["case_id"]: row["retrieval_method"] for row in initial.precedents}
     trace["precedent_retrieval"] = [{k: row[k] for k in ("case_id", "fused_score", "provenance") if k in row} for row in initial.precedents]
