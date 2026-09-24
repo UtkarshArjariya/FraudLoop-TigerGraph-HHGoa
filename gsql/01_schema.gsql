@@ -50,12 +50,12 @@ CREATE VERTEX BillingRegion (PRIMARY_ID region STRING) WITH primary_id_as_attrib
 CREATE VERTEX ClosedCase (PRIMARY_ID case_id STRING, customer_id STRING, card_id STRING,
   opened_at DATETIME, closed_at DATETIME, outcome STRING, pattern STRING,
   first_fraud_txn_id STRING, txn_ids STRING, n_txns INT, exposure_usd DOUBLE,
-  connected_card_ids STRING, actions_taken STRING, report_filed STRING, analyst_notes STRING)
+  connected_card_ids STRING, actions_taken STRING, report_filed STRING, analyst_notes STRING, embed_model STRING)
   WITH primary_id_as_attribute="true"
-CREATE VERTEX DocChunk (PRIMARY_ID doc_id STRING, source_id STRING, text_data STRING)
+CREATE VERTEX DocChunk (PRIMARY_ID doc_id STRING, source_id STRING, text_data STRING, embed_model STRING)
   WITH primary_id_as_attribute="true"
 CREATE VERTEX FraudCase (PRIMARY_ID case_id STRING, customer_id STRING, card_id STRING,
-  opened_epoch INT, verdict STRING, summary STRING, answer_json STRING)
+  opened_epoch INT, verdict STRING, summary STRING, answer_json STRING, embed_model STRING)
   WITH primary_id_as_attribute="true"
 CREATE DIRECTED EDGE Owns (FROM Customer, TO Card) WITH REVERSE_EDGE="OwnedBy"
 CREATE DIRECTED EDGE CardTxn (FROM Card, TO Txn) WITH REVERSE_EDGE="TxnCard"
@@ -76,5 +76,14 @@ CREATE GLOBAL SCHEMA_CHANGE JOB fraudloop_vectors {
   ALTER VERTEX ClosedCase ADD VECTOR ATTRIBUTE embedding(DIMENSION=768, METRIC="COSINE");
   ALTER VERTEX DocChunk ADD VECTOR ATTRIBUTE embedding(DIMENSION=768, METRIC="COSINE");
   ALTER VERTEX FraudCase ADD VECTOR ATTRIBUTE embedding(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX ClosedCase ADD VECTOR ATTRIBUTE emb_gem2(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX ClosedCase ADD VECTOR ATTRIBUTE emb_gemma(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX ClosedCase ADD VECTOR ATTRIBUTE emb_bge(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX DocChunk ADD VECTOR ATTRIBUTE emb_gem2(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX DocChunk ADD VECTOR ATTRIBUTE emb_gemma(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX DocChunk ADD VECTOR ATTRIBUTE emb_bge(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX FraudCase ADD VECTOR ATTRIBUTE emb_gem2(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX FraudCase ADD VECTOR ATTRIBUTE emb_gemma(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX FraudCase ADD VECTOR ATTRIBUTE emb_bge(DIMENSION=768, METRIC="COSINE");
 }
 RUN GLOBAL SCHEMA_CHANGE JOB fraudloop_vectors
