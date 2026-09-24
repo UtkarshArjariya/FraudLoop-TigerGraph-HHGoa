@@ -254,8 +254,10 @@ def test_missing_legacy_attribute_restores_cached_vectors_without_api_calls(envi
     module.CACHE_DIR.mkdir(parents=True, exist_ok=True)
     (module.CACHE_DIR / 'gemini-embedding-001-768.json').write_text(json.dumps({'D0': VECTOR}))
     e.monkeypatch.setattr(module.GeminiEmbedder, 'embed', lambda *args, **kwargs: pytest.fail('must use cache'))
+    cache_before = (module.CACHE_DIR / 'gemini-embedding-001-768.json').read_bytes()
     assert not embeddings.covered_ids(spec)
     result = asyncio.run(module.run(e.args))['indexes'][0]
     assert result['newly_completed'] == 1 and not result['aborted']
     assert embeddings.covered_ids(spec) == {'D0'}
     assert embeddings.LEGACY_CHECKPOINT.read_text() == 'D0\n'
+    assert (module.CACHE_DIR / 'gemini-embedding-001-768.json').read_bytes() == cache_before
