@@ -27,7 +27,7 @@ Set `GEMINI_API_KEY` for all generation and `GEMINI_EMBEDDING` for embedding bui
 
 Discovery lists models with each key, classifies `generateContent` and `embedContent`, and excludes live, TTS, image, and audio models. Results are cached for 24 hours in `data/model_registry.json`. `--refresh-models` is also available on `run_cases`, `embed_docs`, `check_models`, and `migrate_embeddings`.
 
-An empty `GEMINI_MODEL_CHAIN` selects all discovered text candidates: newest Flash, older Flash, Flash Lite, then other text models. A nonempty chain overrides that order and selection; existing `.env` overrides are preserved. `models.list()` reports capabilities, **not free-tier entitlement or a guarantee of remaining quota**. The system does not enable billing or purchase quota. Access failures fall through to the next model.
+An empty `GEMINI_MODEL_CHAIN` selects all discovered text candidates: newest Flash, older Flash, Flash Lite, then other text models. A nonempty chain overrides that order and selection; existing `.env` overrides are preserved. `models.list()` reports capabilities, **not free-tier entitlement or a guarantee of remaining quota**. Use projects without billing enabled to enforce free-only execution; a billed project can charge for listed models. The system does not enable billing or purchase quota. Access failures fall through to the next model.
 
 A 429 with a `QuotaFailure.quotaId` containing `PerDay` disables that model until the next midnight in `America/Los_Angeles`, including daylight-saving changes. `PerMinute` and unclassified 429s use `retryDelay`, defaulting to 30 seconds. State persists by credential scope and model in `data/quota_state.json`. Generation moves immediately to the next usable model; embedding builds can retry after short minute cooldowns. A 503 gets two retries after 2 and 5 seconds. Exhausting the chain returns guarded template prose. Answer metadata records `llm_model_used` and `llm_attempts`, and traces retain every attempt and token usage.
 
@@ -102,3 +102,12 @@ If a previous reset already removed the legacy vector attribute, migration marks
 ```
 
 The original checkpoint and cache are retained. The new per-model checkpoint then tracks the vectors actually restored; missing cached rows stay pending.
+
+On the observed 3.6 GiB Docker VM, GSQL stopped during a long installation. Migration now verifies installed queries on the server rather than trusting only the CLI exit code. After starting GSQL, an interrupted installation can resume in small batches with explicit service restarts:
+
+```bash
+docker exec -u tigergraph tg /home/tigergraph/tigergraph/app/cmd/gadmin start gsql
+.venv/bin/python -m scripts.migrate_embeddings --resume-queries --restart-gsql-every 2
+```
+
+This option temporarily restarts GSQL between batches and waits for readiness. It skips queries already confirmed installed and does not alter vectors or business records.
