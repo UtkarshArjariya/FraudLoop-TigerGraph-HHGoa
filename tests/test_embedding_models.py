@@ -99,3 +99,28 @@ def test_preview_models_get_their_own_attribute_and_model():
     specs = emb.index_specs(registry={'embed': {'models': ['gemini-embedding-2', 'gemini-embedding-2-preview']}})
     two = [s for s in specs if 'embedding-2' in s.model_id]
     assert len(two) == 2 and len({s.attribute for s in two}) == 2
+
+
+def test_migration_requires_server_confirmation_even_when_installer_returns_zero(tmp_path, monkeypatch):
+    from scripts import migrate_embeddings as migration
+    calls = []
+    def run(command, log):
+        calls.append(command[-1])
+        return 'Queries:\n  - similar_cases_gem001() (not installed)\n'
+    monkeypatch.setattr(migration, 'run', run)
+    with pytest.raises(RuntimeError, match='installation incomplete'):
+        migration.install_queries(['docker'], ['similar_cases_gem001'], tmp_path / 'log')
+    assert any('INSTALL QUERY' in command for command in calls)
+
+
+def test_migration_resume_skips_confirmed_installed_queries(tmp_path, monkeypatch):
+    from scripts import migrate_embeddings as migration
+    inventory = 'Queries:\n  - similar_cases_gem001() (installed v2)\n  - old_query() (deprecated)\n'
+    commands = []
+    def run(command, log):
+        commands.append(command[-1])
+        return inventory
+    monkeypatch.setattr(migration, 'run', run)
+    migration.install_queries(['docker'], ['similar_cases_gem001'], tmp_path / 'log', resume=True)
+    assert not any('INSTALL QUERY' in command for command in commands)
+    assert migration.installed_queries(inventory) == {'similar_cases_gem001'}
