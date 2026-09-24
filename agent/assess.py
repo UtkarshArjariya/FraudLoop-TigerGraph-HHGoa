@@ -161,7 +161,13 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
                    provenance=hit["provenance"], retrieval_method="rrf",
                    retrieval_basis=f"{match_label(hit['provenance'])}; RRF={hit['fused_score']:.6f}")
         result.append(row)
-    return result[:5]
+    selected = result[:5]
+    total = sum(row["fused_score"] for row in selected)
+    # RRF scores depend on the number of indexes, not evidence strength. Give
+    # the selected precedents a fixed total weight within the capped family.
+    for row in selected:
+        row["similarity_score"] = row["fused_score"] * len(selected) / total if total else 0
+    return selected
 
 
 def assess(case: dict, flag: dict, window_rows: list[dict], baseline_rows: list[dict],
