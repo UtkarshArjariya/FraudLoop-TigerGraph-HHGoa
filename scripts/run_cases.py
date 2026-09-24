@@ -13,6 +13,7 @@ import pandas as pd
 from agent.answer import Answer, validate_answer
 from agent.investigate import investigate
 from agent.llm import Narrator
+from agent.model_registry import discover
 from agent.mcp_client import GraphClient
 from agent.store import TransactionStore
 
@@ -25,6 +26,7 @@ def write_json(path: Path, value: dict):
 
 
 async def run(args) -> int:
+    await asyncio.to_thread(discover, refresh=getattr(args, "refresh_models", False))
     store = TransactionStore.load(args.store)
     pack = pd.read_csv(args.source / "case_pack.csv", dtype=str).fillna("").sort_values(["opened_at", "case_id"])
     if args.case_id:
@@ -84,6 +86,7 @@ def main():
     parser.add_argument("--local", action="store_true", default=None,
                         help="Explicit pandas fallback; written_to_graph is false")
     parser.add_argument("--no-llm", action="store_true", help="Use deterministic narrative templates")
+    parser.add_argument("--refresh-models", action="store_true", help="Refresh capability discovery for both API keys")
     args = parser.parse_args()
     raise SystemExit(asyncio.run(run(args)))
 
