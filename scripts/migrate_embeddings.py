@@ -128,6 +128,8 @@ def main():
     parser.add_argument('--resume-queries', action='store_true', help='Verify and install only pending query definitions after an interrupted migration')
     parser.add_argument('--restart-gsql-every', type=int, default=0, help='Explicitly restart GSQL after N installs to bound memory in small Docker VMs')
     args = parser.parse_args()
+    if args.restart_gsql_every < 0:
+        parser.error("--restart-gsql-every must be nonnegative")
     registry = discover(refresh=args.refresh_models)
     with index_lock(exclusive=True):
         migrate(args.container, registry=registry, resume_queries=args.resume_queries, restart_every=args.restart_gsql_every)
