@@ -10,5 +10,14 @@ HHGOA_IEEE/*.csv
 .ruff_cache/
 data/graph/*.json
 data/embeddings/
+data/embedded_ids.txt
 data/runs/
 *.egg-info/
+data/embedding_index*.json
+data/embedding_index*.lock
+data/model_checks.json
+data/checkpoints/
+data/embedding_indexes*.json
+data/model_registry.json
+data/quota_state.json
+data/quota_state.lock
