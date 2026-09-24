@@ -201,7 +201,8 @@ export default function GraphPanel({ caseId }: { caseId: string }) {
                         "is_flagged",
                         "has_history",
                         "type",
-                      ].includes(key),
+                      ].includes(key) &&
+                      (key !== "affected" || selected.type === "Txn"),
                   )
                   .map(([key, value]) => (
                     <div key={key}>

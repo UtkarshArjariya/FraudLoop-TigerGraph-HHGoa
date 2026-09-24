@@ -269,7 +269,7 @@ export default function Memory() {
                           <div className="memory-index-heading">
                             <h3>{indexName(index)}</h3>
                             <span className="chip pending">
-                              {human(index.state)}
+                              Saved: {human(index.state)}
                             </span>
                           </div>
                           <p className="memory-model mono">

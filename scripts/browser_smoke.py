@@ -22,6 +22,7 @@ def run(base_url: str, report: Path):
             page.on("pageerror", lambda error: results["errors"].append(str(error)))
             page.on("console", lambda message: results["errors"].append(message.text) if message.type == "error" else None)
             page.goto(base_url)
+            page.get_by_role("searchbox", name="Search cases").fill("HHG-")
             expect(page.locator("tbody tr")).to_have_count(20)
             page.get_by_role("combobox", name="Filter verdict").select_option("fraud")
             expect(page.locator("tbody tr")).to_have_count(9)
