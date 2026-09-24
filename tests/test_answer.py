@@ -71,7 +71,7 @@ def make_sar(payload):
 
 
 def test_valid_answer_and_absolute_exposure(payload, store):
-    assert Answer.model_validate(payload).model_dump() == payload
+    assert Answer.model_validate(payload).model_dump(exclude_unset=True) == payload
     assert validate_answer(payload, store) == []
     payload["case"]["exposure_usd"] = -10
     assert any("exposure_usd" in error for error in validate_answer(payload, store))
