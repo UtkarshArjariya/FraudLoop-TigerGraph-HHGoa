@@ -103,6 +103,7 @@ class GraphClient:
         # Do not forward the Gemini secret to a graph-only subprocess.
         env.pop("GEMINI_API_KEY", None)
         env.pop("GEMINI_EMBEDDING", None)
+        env.pop("HF_TOKEN", None)
         server = StdioServerParameters(command=sys.executable,
                                        args=["-m", "tigergraph_mcp.main"], env=env)
         Path("data/runs").mkdir(parents=True, exist_ok=True)
@@ -173,7 +174,7 @@ class GraphClient:
             raise ModelMismatch("Unsupported vector vertex type")
         for row in vectors:
             require_index(row.get("model_id", row.get("attributes", {}).get("embed_model", "")), attribute, self.use_local)
-            normalize_vectors([row["vector"]], 1)
+            row["vector"] = normalize_vectors([row["vector"]], 1)[0]
         if self.use_local:
             self.tool_calls += 1
             if not hasattr(self.store, "embedding_indexes"):
