@@ -1,0 +1,623 @@
+[
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 1,
+    "timestamp": null,
+    "elapsed_ms": 0.0,
+    "source": "reconstructed",
+    "payload": {
+      "step": "TRIGGER",
+      "state": "TRIGGER",
+      "elapsed_s": 0.0,
+      "timing_source": "saved_trace",
+      "trigger": {
+        "case_id": "HHG-004",
+        "opened_at": "2016-12-29 07:53:54",
+        "trigger_type": "customer_report",
+        "trigger_text": "Customer C08106 message: 'I never made this $128.33 purchase. Please check my card.' Refers to 3583227.",
+        "flagged_txn_id": "3583227",
+        "card_id": "C08106-K1",
+        "customer_id": "C08106",
+        "risk_score": ""
+      },
+      "disclosure": "Reconstructed replay from the saved answer and available trace; no investigation, LLM request, or graph operation runs during replay. State offsets are historical when available; individual tool execution order, durations, and row counts were not recorded. Query cards identify evidence references, not newly observed calls. Customer, step-up, and analyst replies remain disclosed deterministic simulations.",
+      "trace_available": true,
+      "trace_matches_answer": true
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 2,
+    "timestamp": null,
+    "elapsed_ms": 0.0,
+    "source": "reconstructed",
+    "payload": {
+      "step": "GATHER",
+      "state": "GATHER",
+      "elapsed_s": 0.0,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-004",
+    "sequence": 3,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "card_baseline",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-004",
+    "sequence": 4,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "device_ring",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-004",
+    "sequence": 5,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "card_window",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-004",
+    "sequence": 6,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "case_library",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 7,
+    "timestamp": null,
+    "elapsed_ms": 898.7,
+    "source": "reconstructed",
+    "payload": {
+      "step": "ASSESS",
+      "state": "ASSESS",
+      "elapsed_s": 0.8987,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-004",
+    "sequence": 8,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Before the episode, 208 transactions on C08106-K1 have median $27.63 and 95th percentile $96.39. The flagged $128.33 product C is familiar; product codes are not merchant identifiers.",
+      "source": "graph",
+      "ref": "query:card_baseline",
+      "entity_ids": [
+        "3583227",
+        "3562049",
+        "3568649",
+        "3569296",
+        "3570412"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-004",
+    "sequence": 9,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Identity status is New; profile is incomplete or missing. Proxy indicator: not recorded. 1 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+      "source": "graph",
+      "ref": "query:device_ring",
+      "entity_ids": [
+        "3583227",
+        "||firefox 47.0|"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-004",
+    "sequence": 10,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Top-five retrieved precedents: CC-0009 (cleared; same activity typology in analyst narrative); CC-0010 (cleared; same activity typology in analyst narrative); CC-0015 (cleared; same activity typology in analyst narrative); CC-0017 (cleared; same activity typology in analyst narrative); CC-0038 (cleared; same activity typology in analyst narrative). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+      "source": "document",
+      "ref": "retrieval:hybrid_precedents",
+      "entity_ids": [
+        "CC-0009",
+        "CC-0010",
+        "CC-0015",
+        "CC-0017",
+        "CC-0038"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-004",
+    "sequence": 11,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Customer C08106 message: 'I never made this $128.33 purchase. Please check my card.' Refers to 3583227.",
+      "source": "customer",
+      "ref": "case_pack.csv:trigger_text",
+      "entity_ids": [
+        "C08106",
+        "3583227"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-004",
+    "sequence": 12,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Bank risk score 0.34 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+      "source": "graph",
+      "ref": "query:card_window; Fraud Policy 0",
+      "entity_ids": [
+        "3583227"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-004",
+    "sequence": 13,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+      "source": "document",
+      "ref": "HHGOA_IEEE/README.md#fraud-policy",
+      "entity_ids": []
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-004",
+    "sequence": 14,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Retrieved 19 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+      "source": "graph",
+      "ref": "query:case_library",
+      "entity_ids": [
+        "HHG-005",
+        "HHG-001",
+        "HHG-013",
+        "HHG-006",
+        "HHG-002",
+        "HHG-015",
+        "HHG-011",
+        "HHG-008",
+        "HHG-016",
+        "HHG-014",
+        "HHG-007",
+        "HHG-012",
+        "HHG-020",
+        "HHG-003",
+        "HHG-018",
+        "HHG-019",
+        "HHG-010",
+        "HHG-017",
+        "HHG-009"
+      ]
+    }
+  },
+  {
+    "event_type": "assessment",
+    "case_id": "HHG-004",
+    "sequence": 15,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "probability": 0.9606,
+      "verdict": "fraud",
+      "family_contributions": {
+        "amount_product_behavior": 0.843103898367018,
+        "device": 0.15,
+        "recurring_charge": 0.0,
+        "precedent_outcomes": -1.2,
+        "customer_report": 4.5
+      },
+      "exposure_usd": 128.33,
+      "source_detail": "saved_trace"
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 16,
+    "timestamp": null,
+    "elapsed_ms": 959.1,
+    "source": "reconstructed",
+    "payload": {
+      "step": "INITIAL_NBA",
+      "state": "INITIAL_NBA",
+      "elapsed_s": 0.9591,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "nba_initial",
+    "case_id": "HHG-004",
+    "sequence": 17,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "actions": [
+        {
+          "action": "CREATE_CASE",
+          "route": "auto",
+          "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+        },
+        {
+          "action": "BLOCK_CARD",
+          "route": "L1",
+          "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+        }
+      ]
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 18,
+    "timestamp": null,
+    "elapsed_ms": 959.1,
+    "source": "reconstructed",
+    "payload": {
+      "step": "FINAL_NBA",
+      "state": "FINAL_NBA",
+      "elapsed_s": 0.9591,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "nba_final",
+    "case_id": "HHG-004",
+    "sequence": 19,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "actions": [
+        {
+          "action": "CREATE_CASE",
+          "route": "auto",
+          "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+        },
+        {
+          "action": "BLOCK_CARD",
+          "route": "L1",
+          "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+        }
+      ],
+      "what_changed": "nothing"
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 20,
+    "timestamp": null,
+    "elapsed_ms": 959.1,
+    "source": "reconstructed",
+    "payload": {
+      "step": "SAR",
+      "state": "SAR",
+      "elapsed_s": 0.9591,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "sar_drafted",
+    "case_id": "HHG-004",
+    "sequence": 21,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "file": false,
+      "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+      "narrative": "",
+      "subjects": [],
+      "total_amount_usd": 0.0,
+      "activity_dates": [],
+      "recommendation_only": true,
+      "filing_status": "not_recommended"
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 22,
+    "timestamp": null,
+    "elapsed_ms": 959.2,
+    "source": "reconstructed",
+    "payload": {
+      "step": "WRITE_BACK",
+      "state": "WRITE_BACK",
+      "elapsed_s": 0.9592,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "case_written",
+    "case_id": "HHG-004",
+    "sequence": 23,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "case_id": "HHG-004",
+      "written_to_graph": true,
+      "graph_case_id": "HHG-004",
+      "historical_writeback": true,
+      "disclosure": "Write-back status from the saved answer; replay performs no graph write and does not recheck the stored vertex."
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-004",
+    "sequence": 24,
+    "timestamp": null,
+    "elapsed_ms": 989.4,
+    "source": "reconstructed",
+    "payload": {
+      "step": "ANSWER",
+      "state": "ANSWER",
+      "elapsed_s": 0.9894,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "done",
+    "case_id": "HHG-004",
+    "sequence": 25,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "case_id": "HHG-004",
+      "verdict": "fraud",
+      "probability": 0.9606,
+      "status": "closed_fraud",
+      "sar": false,
+      "written_to_graph": true,
+      "tool_calls": 7,
+      "latency_s": 0.9894,
+      "stop_reason": "R2 and section 6: the customer denial already recorded in the case pack settles the authorization question for this recommendation. No additional customer contact was performed.",
+      "answer": {
+        "case_id": "HHG-004",
+        "case": {
+          "status": "closed_fraud",
+          "verdict": "fraud",
+          "fraud_probability": 0.9606,
+          "pattern": "card_not_present_new_device",
+          "pattern_description": "",
+          "affected_txn_ids": [
+            "3583227"
+          ],
+          "first_suspicious_txn_id": "3583227",
+          "connected_card_ids": [],
+          "connected_device_profiles": [],
+          "exposure_usd": 128.33,
+          "evidence": [
+            {
+              "claim": "Before the episode, 208 transactions on C08106-K1 have median $27.63 and 95th percentile $96.39. The flagged $128.33 product C is familiar; product codes are not merchant identifiers.",
+              "source": "graph",
+              "ref": "query:card_baseline",
+              "entity_ids": [
+                "3583227",
+                "3562049",
+                "3568649",
+                "3569296",
+                "3570412"
+              ]
+            },
+            {
+              "claim": "Identity status is New; profile is incomplete or missing. Proxy indicator: not recorded. 1 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+              "source": "graph",
+              "ref": "query:device_ring",
+              "entity_ids": [
+                "3583227",
+                "||firefox 47.0|"
+              ]
+            },
+            {
+              "claim": "Top-five retrieved precedents: CC-0009 (cleared; same activity typology in analyst narrative); CC-0010 (cleared; same activity typology in analyst narrative); CC-0015 (cleared; same activity typology in analyst narrative); CC-0017 (cleared; same activity typology in analyst narrative); CC-0038 (cleared; same activity typology in analyst narrative). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+              "source": "document",
+              "ref": "retrieval:hybrid_precedents",
+              "entity_ids": [
+                "CC-0009",
+                "CC-0010",
+                "CC-0015",
+                "CC-0017",
+                "CC-0038"
+              ]
+            },
+            {
+              "claim": "Customer C08106 message: 'I never made this $128.33 purchase. Please check my card.' Refers to 3583227.",
+              "source": "customer",
+              "ref": "case_pack.csv:trigger_text",
+              "entity_ids": [
+                "C08106",
+                "3583227"
+              ]
+            },
+            {
+              "claim": "Bank risk score 0.34 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+              "source": "graph",
+              "ref": "query:card_window; Fraud Policy 0",
+              "entity_ids": [
+                "3583227"
+              ]
+            },
+            {
+              "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+              "source": "document",
+              "ref": "HHGOA_IEEE/README.md#fraud-policy",
+              "entity_ids": []
+            },
+            {
+              "claim": "Retrieved 19 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+              "source": "graph",
+              "ref": "query:case_library",
+              "entity_ids": [
+                "HHG-005",
+                "HHG-001",
+                "HHG-013",
+                "HHG-006",
+                "HHG-002",
+                "HHG-015",
+                "HHG-011",
+                "HHG-008",
+                "HHG-016",
+                "HHG-014",
+                "HHG-007",
+                "HHG-012",
+                "HHG-020",
+                "HHG-003",
+                "HHG-018",
+                "HHG-019",
+                "HHG-010",
+                "HHG-017",
+                "HHG-009"
+              ]
+            }
+          ],
+          "similar_prior_cases": [
+            "CC-0009",
+            "CC-0010",
+            "CC-0015",
+            "CC-0017",
+            "CC-0038"
+          ],
+          "summary": "C08106-K1 was assessed as fraud with fraud probability 0.961, with card not present new device. The identified suspicious exposure is $128.33; 5 closed precedents were retrieved. The case-pack customer denial is observed input. Recommendations follow the cited policy and any L1/L2 action awaits human approval.",
+          "written_to_graph": true,
+          "graph_case_id": "HHG-004"
+        },
+        "evidence_requests": [],
+        "next_best_actions": {
+          "initial": [
+            {
+              "action": "CREATE_CASE",
+              "route": "auto",
+              "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+            },
+            {
+              "action": "BLOCK_CARD",
+              "route": "L1",
+              "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+            }
+          ],
+          "final": [
+            {
+              "action": "CREATE_CASE",
+              "route": "auto",
+              "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+            },
+            {
+              "action": "BLOCK_CARD",
+              "route": "L1",
+              "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+            }
+          ],
+          "what_changed": "nothing"
+        },
+        "sar": {
+          "file": false,
+          "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+          "narrative": "",
+          "subjects": [],
+          "total_amount_usd": 0.0,
+          "activity_dates": []
+        },
+        "stop_reason": "R2 and section 6: the customer denial already recorded in the case pack settles the authorization question for this recommendation. No additional customer contact was performed.",
+        "tool_calls": 7,
+        "tokens": 0,
+        "latency_s": 0.9894
+      },
+      "disclosure": "Reconstructed replay from the saved answer and available trace; no investigation, LLM request, or graph operation runs during replay. State offsets are historical when available; individual tool execution order, durations, and row counts were not recorded. Query cards identify evidence references, not newly observed calls. Customer, step-up, and analyst replies remain disclosed deterministic simulations."
+    }
+  }
+]

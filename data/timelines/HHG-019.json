@@ -1,0 +1,619 @@
+[
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 1,
+    "timestamp": null,
+    "elapsed_ms": 0.0,
+    "source": "reconstructed",
+    "payload": {
+      "step": "TRIGGER",
+      "state": "TRIGGER",
+      "elapsed_s": 0.0,
+      "timing_source": "saved_trace",
+      "trigger": {
+        "case_id": "HHG-019",
+        "opened_at": "2016-12-01 22:28:53",
+        "trigger_type": "risk_score",
+        "trigger_text": "Real-time model scored transaction 3503878 ($99.92, online) at 0.90. Review and decide.",
+        "flagged_txn_id": "3503878",
+        "card_id": "C07987-K2",
+        "customer_id": "C07987",
+        "risk_score": "0.90"
+      },
+      "disclosure": "Reconstructed replay from the saved answer and available trace; no investigation, LLM request, or graph operation runs during replay. State offsets are historical when available; individual tool execution order, durations, and row counts were not recorded. Query cards identify evidence references, not newly observed calls. Customer, step-up, and analyst replies remain disclosed deterministic simulations.",
+      "trace_available": true,
+      "trace_matches_answer": true
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 2,
+    "timestamp": null,
+    "elapsed_ms": 0.0,
+    "source": "reconstructed",
+    "payload": {
+      "step": "GATHER",
+      "state": "GATHER",
+      "elapsed_s": 0.0,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-019",
+    "sequence": 3,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "card_baseline",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-019",
+    "sequence": 4,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "device_ring",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-019",
+    "sequence": 5,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "region_cluster",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-019",
+    "sequence": 6,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "card_window",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "tool_call",
+    "case_id": "HHG-019",
+    "sequence": 7,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "tool": "case_library",
+      "args_summary": {},
+      "duration_ms": null,
+      "rows": null,
+      "row_counts": {},
+      "success": null,
+      "execution_observed": false,
+      "order_observed": false,
+      "backend": "tigergraph-mcp",
+      "disclosure": "Query cited by saved evidence; execution order, timing, and row counts are unavailable."
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 8,
+    "timestamp": null,
+    "elapsed_ms": 1109.7,
+    "source": "reconstructed",
+    "payload": {
+      "step": "ASSESS",
+      "state": "ASSESS",
+      "elapsed_s": 1.1097,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-019",
+    "sequence": 9,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Before the episode, 218 transactions on C07987-K2 have median $116.92 and 95th percentile $558.24. The flagged $99.92 product R is familiar; product codes are not merchant identifiers.",
+      "source": "graph",
+      "ref": "query:card_baseline",
+      "entity_ids": [
+        "3503878",
+        "3467489",
+        "3481019",
+        "3487671",
+        "3495125"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-019",
+    "sequence": 10,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Identity status is New; profile is complete. Proxy indicator: not recorded. 3 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+      "source": "graph",
+      "ref": "query:device_ring",
+      "entity_ids": [
+        "3503878",
+        "Windows|other|chrome 61.0|1280x720"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-019",
+    "sequence": 11,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Billing-region code 264.0 is present in prior card history. The code is not a precise physical location.",
+      "source": "graph",
+      "ref": "query:card_baseline; query:region_cluster",
+      "entity_ids": [
+        "3503878",
+        "3103105",
+        "3170180",
+        "3230073"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-019",
+    "sequence": 12,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Top-five retrieved precedents: CC-0017 (cleared; graph card/device/region relationship); CC-0219 (cleared; graph card/device/region relationship); CC-0585 (cleared; graph card/device/region relationship); CC-0681 (cleared; graph card/device/region relationship); CC-0831 (cleared; graph card/device/region relationship). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+      "source": "document",
+      "ref": "retrieval:hybrid_precedents",
+      "entity_ids": [
+        "CC-0017",
+        "CC-0219",
+        "CC-0585",
+        "CC-0681",
+        "CC-0831"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-019",
+    "sequence": 13,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Bank risk score 0.90 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+      "source": "graph",
+      "ref": "query:card_window; Fraud Policy 0",
+      "entity_ids": [
+        "3503878"
+      ]
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-019",
+    "sequence": 14,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+      "source": "document",
+      "ref": "HHGOA_IEEE/README.md#fraud-policy",
+      "entity_ids": []
+    }
+  },
+  {
+    "event_type": "evidence_added",
+    "case_id": "HHG-019",
+    "sequence": 15,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "claim": "Retrieved 6 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+      "source": "graph",
+      "ref": "query:case_library",
+      "entity_ids": [
+        "HHG-017",
+        "HHG-002",
+        "HHG-014",
+        "HHG-015",
+        "HHG-006",
+        "HHG-018"
+      ]
+    }
+  },
+  {
+    "event_type": "assessment",
+    "case_id": "HHG-019",
+    "sequence": 16,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "phase": "initial",
+      "probability": 0.0339,
+      "verdict": "legitimate",
+      "family_contributions": {
+        "amount_product_behavior": -0.7,
+        "device": 0.15,
+        "region": -0.5,
+        "recurring_charge": 0.0,
+        "precedent_outcomes": -1.2
+      },
+      "exposure_usd": 0.0,
+      "source_detail": "saved_trace"
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 17,
+    "timestamp": null,
+    "elapsed_ms": 1161.6,
+    "source": "reconstructed",
+    "payload": {
+      "step": "INITIAL_NBA",
+      "state": "INITIAL_NBA",
+      "elapsed_s": 1.1616,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "nba_initial",
+    "case_id": "HHG-019",
+    "sequence": 18,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "actions": [
+        {
+          "action": "CREATE_CASE",
+          "route": "auto",
+          "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+        },
+        {
+          "action": "CLOSE_NO_FRAUD",
+          "route": "auto",
+          "reason": "Sections 1 and 6: the assessed activity is legitimate; close the alert with its supporting evidence."
+        }
+      ]
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 19,
+    "timestamp": null,
+    "elapsed_ms": 1161.6,
+    "source": "reconstructed",
+    "payload": {
+      "step": "FINAL_NBA",
+      "state": "FINAL_NBA",
+      "elapsed_s": 1.1616,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "nba_final",
+    "case_id": "HHG-019",
+    "sequence": 20,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "actions": [
+        {
+          "action": "CREATE_CASE",
+          "route": "auto",
+          "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+        },
+        {
+          "action": "CLOSE_NO_FRAUD",
+          "route": "auto",
+          "reason": "Sections 1 and 6: the assessed activity is legitimate; close the alert with its supporting evidence."
+        }
+      ],
+      "what_changed": "nothing"
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 21,
+    "timestamp": null,
+    "elapsed_ms": 1161.6,
+    "source": "reconstructed",
+    "payload": {
+      "step": "SAR",
+      "state": "SAR",
+      "elapsed_s": 1.1616,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "sar_drafted",
+    "case_id": "HHG-019",
+    "sequence": 22,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "file": false,
+      "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+      "narrative": "",
+      "subjects": [],
+      "total_amount_usd": 0.0,
+      "activity_dates": [],
+      "recommendation_only": true,
+      "filing_status": "not_recommended"
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 23,
+    "timestamp": null,
+    "elapsed_ms": 1161.7,
+    "source": "reconstructed",
+    "payload": {
+      "step": "WRITE_BACK",
+      "state": "WRITE_BACK",
+      "elapsed_s": 1.1617,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "case_written",
+    "case_id": "HHG-019",
+    "sequence": 24,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "case_id": "HHG-019",
+      "written_to_graph": true,
+      "graph_case_id": "HHG-019",
+      "historical_writeback": true,
+      "disclosure": "Write-back status from the saved answer; replay performs no graph write and does not recheck the stored vertex."
+    }
+  },
+  {
+    "event_type": "step_started",
+    "case_id": "HHG-019",
+    "sequence": 25,
+    "timestamp": null,
+    "elapsed_ms": 1181.1,
+    "source": "reconstructed",
+    "payload": {
+      "step": "ANSWER",
+      "state": "ANSWER",
+      "elapsed_s": 1.1811,
+      "timing_source": "saved_trace"
+    }
+  },
+  {
+    "event_type": "done",
+    "case_id": "HHG-019",
+    "sequence": 26,
+    "timestamp": null,
+    "elapsed_ms": null,
+    "source": "reconstructed",
+    "payload": {
+      "case_id": "HHG-019",
+      "verdict": "legitimate",
+      "probability": 0.0339,
+      "status": "closed_legitimate",
+      "sar": false,
+      "written_to_graph": true,
+      "tool_calls": 8,
+      "latency_s": 1.1811,
+      "stop_reason": "Section 6: fraud probability is at most 0.15 with at least two independent evidence families.",
+      "answer": {
+        "case_id": "HHG-019",
+        "case": {
+          "status": "closed_legitimate",
+          "verdict": "legitimate",
+          "fraud_probability": 0.0339,
+          "pattern": "none",
+          "pattern_description": "",
+          "affected_txn_ids": [],
+          "first_suspicious_txn_id": "",
+          "connected_card_ids": [],
+          "connected_device_profiles": [],
+          "exposure_usd": 0.0,
+          "evidence": [
+            {
+              "claim": "Before the episode, 218 transactions on C07987-K2 have median $116.92 and 95th percentile $558.24. The flagged $99.92 product R is familiar; product codes are not merchant identifiers.",
+              "source": "graph",
+              "ref": "query:card_baseline",
+              "entity_ids": [
+                "3503878",
+                "3467489",
+                "3481019",
+                "3487671",
+                "3495125"
+              ]
+            },
+            {
+              "claim": "Identity status is New; profile is complete. Proxy indicator: not recorded. 3 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+              "source": "graph",
+              "ref": "query:device_ring",
+              "entity_ids": [
+                "3503878",
+                "Windows|other|chrome 61.0|1280x720"
+              ]
+            },
+            {
+              "claim": "Billing-region code 264.0 is present in prior card history. The code is not a precise physical location.",
+              "source": "graph",
+              "ref": "query:card_baseline; query:region_cluster",
+              "entity_ids": [
+                "3503878",
+                "3103105",
+                "3170180",
+                "3230073"
+              ]
+            },
+            {
+              "claim": "Top-five retrieved precedents: CC-0017 (cleared; graph card/device/region relationship); CC-0219 (cleared; graph card/device/region relationship); CC-0585 (cleared; graph card/device/region relationship); CC-0681 (cleared; graph card/device/region relationship); CC-0831 (cleared; graph card/device/region relationship). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+              "source": "document",
+              "ref": "retrieval:hybrid_precedents",
+              "entity_ids": [
+                "CC-0017",
+                "CC-0219",
+                "CC-0585",
+                "CC-0681",
+                "CC-0831"
+              ]
+            },
+            {
+              "claim": "Bank risk score 0.90 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+              "source": "graph",
+              "ref": "query:card_window; Fraud Policy 0",
+              "entity_ids": [
+                "3503878"
+              ]
+            },
+            {
+              "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+              "source": "document",
+              "ref": "HHGOA_IEEE/README.md#fraud-policy",
+              "entity_ids": []
+            },
+            {
+              "claim": "Retrieved 6 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+              "source": "graph",
+              "ref": "query:case_library",
+              "entity_ids": [
+                "HHG-017",
+                "HHG-002",
+                "HHG-014",
+                "HHG-015",
+                "HHG-006",
+                "HHG-018"
+              ]
+            }
+          ],
+          "similar_prior_cases": [
+            "CC-0017",
+            "CC-0219",
+            "CC-0585",
+            "CC-0681",
+            "CC-0831"
+          ],
+          "summary": "C07987-K2 was assessed as legitimate with fraud probability 0.034, with no established fraud typology. The identified suspicious exposure is $0.00; 5 closed precedents were retrieved. No customer response was assumed. Recommendations follow the cited policy and any L1/L2 action awaits human approval.",
+          "written_to_graph": true,
+          "graph_case_id": "HHG-019"
+        },
+        "evidence_requests": [],
+        "next_best_actions": {
+          "initial": [
+            {
+              "action": "CREATE_CASE",
+              "route": "auto",
+              "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+            },
+            {
+              "action": "CLOSE_NO_FRAUD",
+              "route": "auto",
+              "reason": "Sections 1 and 6: the assessed activity is legitimate; close the alert with its supporting evidence."
+            }
+          ],
+          "final": [
+            {
+              "action": "CREATE_CASE",
+              "route": "auto",
+              "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+            },
+            {
+              "action": "CLOSE_NO_FRAUD",
+              "route": "auto",
+              "reason": "Sections 1 and 6: the assessed activity is legitimate; close the alert with its supporting evidence."
+            }
+          ],
+          "what_changed": "nothing"
+        },
+        "sar": {
+          "file": false,
+          "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+          "narrative": "",
+          "subjects": [],
+          "total_amount_usd": 0.0,
+          "activity_dates": []
+        },
+        "stop_reason": "Section 6: fraud probability is at most 0.15 with at least two independent evidence families.",
+        "tool_calls": 8,
+        "tokens": 0,
+        "latency_s": 1.1811
+      },
+      "disclosure": "Reconstructed replay from the saved answer and available trace; no investigation, LLM request, or graph operation runs during replay. State offsets are historical when available; individual tool execution order, durations, and row counts were not recorded. Query cards identify evidence references, not newly observed calls. Customer, step-up, and analyst replies remain disclosed deterministic simulations."
+    }
+  }
+]

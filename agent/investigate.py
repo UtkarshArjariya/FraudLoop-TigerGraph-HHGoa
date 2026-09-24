@@ -13,6 +13,7 @@ import pandas as pd
 
 from agent.assess import Assessment, assess, choose_request, evidence, reassess, simulate_response
 from agent.embeddings import index_specs, index_lock, covered_ids, provider_for, embed_vectors, checkpoint_path
+from agent.events import EventCallback, ObservedGraph, evidence_request_reason, safe_emitter
 from agent.retrieval import retrieve_indexes, graph_paths
 from agent.mcp_client import GraphClient, GraphError
 from agent.policy import PolicyContext, recommend, stopping_reason
@@ -80,7 +81,21 @@ def templates(case: dict, result: Assessment, initial: Assessment, requests: lis
             "sar_narrative": narrative, "what_changed": changed, "stop_reason": stop}
 
 
-async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | None = None) -> tuple[dict, dict]:
+async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | None = None,
+                      emit: EventCallback | None = None) -> tuple[dict, dict]:
+    """Run the existing policy flow with an optional nonfatal synchronous observer."""
+    observer = safe_emitter(emit)
+    observed_graph = ObservedGraph(graph, observer) if emit is not None else graph
+    try:
+        return await _investigate(case, observed_graph, narrator=narrator, emit=observer)
+    except Exception as exc:
+        observer("error", {"case_id": case.get("case_id", ""), "error_type": type(exc).__name__,
+                           "message": "Investigation failed; no completed answer is available from this run."})
+        raise
+
+
+async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | None,
+                       emit: EventCallback) -> tuple[dict, dict]:
     started = time.perf_counter()
     call_start = graph.tool_calls
     trace = {"case_id": case["case_id"], "backend": "local" if graph.use_local else "tigergraph-mcp",
@@ -88,6 +103,11 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
 
     def state(name: str):
         trace["states"].append({"state": name, "elapsed_s": round(time.perf_counter()-started, 4)})
+        payload = {"step": name, "state": name, "elapsed_s": trace["states"][-1]["elapsed_s"]}
+        if name == "TRIGGER":
+            payload["trigger"] = {key: case.get(key, "") for key in
+                                  ("case_id", "opened_at", "trigger_type", "trigger_text", "flagged_txn_id", "card_id", "customer_id")}
+        emit("step_started", payload)
 
     state("TRIGGER")
     as_of = int(pd.Timestamp(case["opened_at"], tz="UTC").timestamp())
@@ -143,6 +163,11 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
     trace["initial_families"] = initial.families
     trace["initial_probability"] = initial.probability
     trace["candidate_exposure_usd"] = round(sum(abs(float(row["amount"])) for row in initial.episode), 2)
+    for item in initial.evidence:
+        emit("evidence_added", {"phase": "initial", **item})
+    emit("assessment", {"phase": "initial", "probability": initial.probability,
+                        "verdict": initial.verdict, "family_contributions": initial.families,
+                        "pattern": initial.pattern, "exposure_usd": initial.exposure})
     stop = stopping_reason(context(initial, case), verified=(initial.response == "denied" and not initial.features["recurring_match"]))
     if initial.response == "denied" and not initial.features["recurring_match"]:
         stop = "R2 and section 6: the customer denial already recorded in the case pack settles the authorization question for this recommendation. No additional customer contact was performed."
@@ -150,14 +175,26 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
     state("INITIAL_NBA")
     initial_actions = recommend(context(initial, case, request_type))
     trace["initial_policy_context"] = asdict(context(initial, case, request_type))
+    emit("nba_initial", {"actions": initial_actions})
     result = initial
     requests = []
     if request_type:
         state("REQUEST_EVIDENCE")
+        emit("evidence_requested", {"type": request_type,
+                                    "reason": evidence_request_reason(request_type, initial_actions),
+                                    "precedent_ids": [row["case_id"] for row in initial.precedents],
+                                    "simulated": True})
         response, response_text = simulate_response(initial, request_type)
         requests.append({"type": request_type, "asked_after_step": 4, "assumed_response": response_text})
+        emit("evidence_received", {"type": request_type, "response": response,
+                                   "assumed_response": response_text, "simulated": True})
         state("REASSESS")
         result = reassess(initial, response, response_text)
+        for item in result.evidence[len(initial.evidence):]:
+            emit("evidence_added", {"phase": "reassessment", **item})
+        emit("assessment", {"phase": "final", "probability": result.probability,
+                            "verdict": result.verdict, "family_contributions": result.families,
+                            "pattern": result.pattern, "exposure_usd": result.exposure})
         stop = stopping_reason(context(result, case), verified=result.verified)
     state("FINAL_NBA")
     final_actions = recommend(context(result, case)) if requests else initial_actions
@@ -166,8 +203,9 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
         stop = ("Section 6: the remaining uncertainty is authorization that anonymized records cannot settle. "
                 "The simulated response added no decisive evidence; further automated steps are unlikely to change the recommendation. "
                 + ("R8 escalation is recommended." if any(a["action"] == "ESCALATE_TO_ANALYST" for a in final_actions) else "The card remains under monitoring and the case remains open."))
-    state("SAR")
     words = templates(case, result, initial, requests, final_actions, stop)
+    emit("nba_final", {"actions": final_actions, "what_changed": words["what_changed"]})
+    state("SAR")
     tokens = 0
     if narrator is not None:
         brief = {"case_id": case["case_id"], "customer_id": case["customer_id"], "card_id": case["card_id"],
@@ -212,6 +250,8 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
         "stop_reason": words["stop_reason"], "tool_calls": graph.tool_calls-call_start,
         "tokens": tokens, "latency_s": round(time.perf_counter()-started, 4),
     }
+    emit("sar_drafted", {**answer["sar"], "recommendation_only": True,
+                         "filing_status": "awaiting_l2_approval" if files_report else "not_recommended"})
     state("WRITE_BACK")
     # The existing case-pack ID is also the graph vertex ID: no invented IDs.
     stored = json.loads(json.dumps(answer))
@@ -225,6 +265,10 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
     })
     answer["case"]["written_to_graph"] = not graph.use_local
     answer["case"]["graph_case_id"] = case["case_id"] if not graph.use_local else ""
+    emit("case_written", {"case_id": case["case_id"],
+                          "written_to_graph": answer["case"]["written_to_graph"],
+                          "graph_case_id": answer["case"]["graph_case_id"],
+                          "stored_locally": bool(write_result.get("stored_locally", graph.use_local))})
     try:
         with index_lock(graph.use_local, exclusive=True):
             for spec in index_specs(graph.use_local):
@@ -252,6 +296,11 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
     trace["final_families"] = result.families
     trace["tool_calls"] = answer["tool_calls"]
     trace["latency_s"] = answer["latency_s"]
+    emit("done", {"case_id": case["case_id"], "verdict": result.verdict,
+                  "probability": result.probability, "status": status,
+                  "sar": files_report, "written_to_graph": answer["case"]["written_to_graph"],
+                  "tool_calls": answer["tool_calls"], "latency_s": answer["latency_s"],
+                  "stop_reason": answer["stop_reason"], "answer": answer})
     return answer, trace
 
 

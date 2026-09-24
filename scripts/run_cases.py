@@ -11,6 +11,7 @@ import sys
 import pandas as pd
 
 from agent.answer import Answer, validate_answer
+from agent.events import EventRecorder, write_timeline
 from agent.investigate import investigate
 from agent.llm import Narrator
 from agent.model_registry import discover
@@ -42,8 +43,10 @@ async def run(args) -> int:
     async with GraphClient(use_local=args.local, store=store if args.local else None) as graph:
         print(f"Backend: {'local fallback' if graph.use_local else 'TigerGraph via MCP'}; cases: {len(pack)}", flush=True)
         for case in pack.to_dict(orient="records"):
+            recorder = EventRecorder(case["case_id"])
+            timeline_dir = getattr(args, "timelines", Path("data/timelines"))
             try:
-                answer, trace = await investigate(case, graph, narrator=narrator)
+                answer, trace = await investigate(case, graph, narrator=narrator, emit=recorder.emit)
                 answer = Answer.model_validate(answer).model_dump()
                 problems = validate_answer(answer, store, trace=trace)
                 if problems:
@@ -51,6 +54,7 @@ async def run(args) -> int:
                     raise ValueError("; ".join(problems))
                 write_json(args.output / f"{case['case_id']}.json", answer)
                 write_json(args.traces / f"{case['case_id']}.trace.json", trace)
+                write_timeline(timeline_dir / f"{case['case_id']}.json", recorder.events)
                 row = {"case": case["case_id"], "verdict": answer["case"]["verdict"],
                        "p": answer["case"]["fraud_probability"], "pattern": answer["case"]["pattern"],
                        "txns": len(answer["case"]["affected_txn_ids"]), "exposure": answer["case"]["exposure_usd"],
@@ -59,6 +63,14 @@ async def run(args) -> int:
                 rows.append(row)
                 print(f"{row['case']}  {row['verdict']:10s} p={row['p']:.3f}  ${row['exposure']:9.2f}  SAR={row['SAR']}  graph={row['graph']}  {row['seconds']:.2f}s", flush=True)
             except Exception as exc:
+                if not recorder.events or recorder.events[-1]["event_type"] != "error":
+                    recorder.emit("error", {"error_type": type(exc).__name__,
+                                            "message": "Run did not publish a validated answer and timeline."})
+                # A failed attempt must not replace a previously successful replay.
+                try:
+                    write_timeline(args.traces / f"{case['case_id']}.failed.timeline.json", recorder.events)
+                except OSError as timeline_error:
+                    print(f"{case['case_id']}: failed timeline could not be saved: {timeline_error}", file=sys.stderr, flush=True)
                 message = f"{case['case_id']}: {type(exc).__name__}: {exc}"
                 errors.append(message)
                 print(message, file=sys.stderr, flush=True)
@@ -82,6 +94,8 @@ def main():
     parser.add_argument("--store", type=Path, default=Path("data/transaction_store.pkl"))
     parser.add_argument("--output", type=Path, default=Path("cases"))
     parser.add_argument("--traces", type=Path, default=Path("data/runs"))
+    parser.add_argument("--timelines", type=Path, default=Path("data/timelines"),
+                        help="Directory for actual recorded investigation event streams")
     parser.add_argument("--case-id", action="append")
     parser.add_argument("--local", action="store_true", default=None,
                         help="Explicit pandas fallback; written_to_graph is false")
