@@ -124,3 +124,10 @@ def test_migration_resume_skips_confirmed_installed_queries(tmp_path, monkeypatc
     migration.install_queries(['docker'], ['similar_cases_gem001'], tmp_path / 'log', resume=True)
     assert not any('INSTALL QUERY' in command for command in commands)
     assert migration.installed_queries(inventory) == {'similar_cases_gem001'}
+
+
+def test_reserved_attribute_cannot_be_claimed_even_in_an_empty_manifest():
+    with pytest.raises(emb.ModelMismatch):
+        emb.register_index(emb.IndexSpec('other', emb.GEMMA_MODEL, 'emb_bge', 'gemma'))
+    with pytest.raises(emb.ModelMismatch):
+        emb.register_index(emb.IndexSpec('bge', 'different-model', 'other_attribute', 'gemini'))
