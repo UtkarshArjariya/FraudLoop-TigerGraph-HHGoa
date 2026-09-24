@@ -22,7 +22,18 @@ from backend.data import Repository, atomic_json, read_json, utc_now
 from backend.services import GraphGateway, InvestigationManager
 
 logger = logging.getLogger("fraudloop.api")
-logger.setLevel(logging.INFO)
+
+
+def configure_logging():
+    """Emit our JSON records even when uvicorn configures only its own loggers."""
+    logger.setLevel(logging.INFO)
+    if not any(getattr(handler, "fraudloop_json", False) for handler in logger.handlers):
+        handler = logging.StreamHandler()
+        handler.fraudloop_json = True
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(handler)
+    logger.propagate = False
 
 
 class Trigger(BaseModel):
@@ -76,6 +87,7 @@ def gemini_status(repo):
 
 
 def create_app(root: Path | str | None = None):
+    configure_logging()
     root = Path(root or os.getenv("FRAUDLOOP_ROOT") or Path(__file__).resolve().parents[1])
     load_dotenv(root / ".env")
     repo = Repository(root)
@@ -100,7 +112,8 @@ def create_app(root: Path | str | None = None):
     async def request_logging(request, call_next):
         started = time.perf_counter()
         response = await call_next(request)
-        logger.info(json.dumps({"event": "http_request", "method": request.method, "path": request.url.path,
+        route = getattr(request.scope.get("route"), "path", "unmatched")
+        logger.info(json.dumps({"event": "http_request", "method": request.method, "path": route,
             "status": response.status_code, "duration_ms": round((time.perf_counter() - started) * 1000)}))
         return response
 
@@ -116,7 +129,8 @@ def create_app(root: Path | str | None = None):
 
     @app.exception_handler(Exception)
     async def unexpected_error(request, exc):
-        logger.error(json.dumps({"event": "http_error", "path": request.url.path, "error_type": type(exc).__name__}))
+        route = getattr(request.scope.get("route"), "path", "unmatched")
+        logger.error(json.dumps({"event": "http_error", "path": route, "error_type": type(exc).__name__}))
         return JSONResponse(status_code=500, content={"error": {"message": "The operation could not be completed. Check local service logs.", "status": 500}})
 
     def require_case(case_id):

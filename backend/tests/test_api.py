@@ -217,6 +217,30 @@ def test_cors(client):
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_structured_http_logging_is_visible_once_and_excludes_request_contents(client):
+    from io import StringIO
+    from backend.app import configure_logging, logger
+
+    configure_logging()
+    configure_logging()
+    handlers = [handler for handler in logger.handlers if getattr(handler, "fraudloop_json", False)]
+    assert len(handlers) == 1 and logger.propagate is False
+    stream = StringIO()
+    previous_stream = handlers[0].setStream(stream)
+    try:
+        client.get("/api/cases/HHG-014?api_key=secret-query", headers={"Authorization": "Bearer secret-header"})
+        client.post("/api/investigations", json={"type": "customer_report", "card_id": "C13487-K1", "text": "private-narrative"})
+        client.get("/unmatched-secret-path")
+    finally:
+        handlers[0].setStream(previous_stream)
+    output = stream.getvalue()
+    records = [json.loads(line) for line in output.splitlines()]
+    assert len(records) == 3 and all(row["event"] == "http_request" for row in records)
+    assert [row["path"] for row in records] == ["/api/cases/{case_id}", "/api/investigations", "unmatched"]
+    assert [row["status"] for row in records] == [200, 201, 404]
+    assert all(key not in output for key in ("secret-query", "secret-header", "private-narrative", "unmatched-secret-path"))
+
+
 @pytest.mark.asyncio
 async def test_disconnect_does_not_cancel_background_run(app):
     manager = app.state.manager
