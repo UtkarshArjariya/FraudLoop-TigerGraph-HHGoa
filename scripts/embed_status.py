@@ -1,5 +1,7 @@
 """Report per-index durable checkpoint coverage, without API or graph calls."""
 import argparse
+import json
+import os
 
 from agent.embeddings import covered_ids, index_specs
 from agent.store import TransactionStore
@@ -10,7 +12,11 @@ from pathlib import Path
 def coverage_rows(store, *, local=False):
     corpus = set(store.history.case_id) | {doc['doc_id'] for doc in documents(Path('HHGOA_IEEE/README.md'))}
     rows = []
-    for spec in index_specs(local):
+    try:
+        registry = json.loads(Path(os.getenv("MODEL_REGISTRY_PATH", "data/model_registry.json")).read_text())
+    except (OSError, ValueError):
+        registry = None
+    for spec in index_specs(local, registry=registry):
         count = len(covered_ids(spec, local) & corpus)
         rows.append({'index': spec.key, 'vectors': count, 'total': len(corpus), 'coverage': count / max(1, len(corpus)),
                      'model': spec.model_id, 'dim': spec.dim, 'attribute': spec.attribute})
