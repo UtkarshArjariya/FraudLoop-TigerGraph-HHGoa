@@ -190,24 +190,32 @@ class LocalBackend:
         usable_query = (vector.ndim == 1 and vector.size > 0
                         and np.isfinite(vector).all() and np.linalg.norm(vector) > 0)
         scored = []
-        if usable_query:
-            for row in candidates:
+        query_tokens = _tokens(params.get("query_text", ""))
+        for row in candidates:
+            score = None
+            raw = None
+            attribute = params.get("attribute")
+            if attribute:
+                from agent.embeddings import require_index
+                require_index(params.get("embed_model", ""), attribute, local=True)
+                if str(row[id_key]) in set(params.get("covered_ids", [])):
+                    raw = getattr(self.store, "embedding_indexes", {}).get(attribute, {}).get(str(row[id_key]))
+            elif (params.get("embed_model") == getattr(self.store, "embedding_model_id", "")
+                  and getattr(self.store, "embedding_models", {}).get(str(row[id_key])) == params.get("embed_model")):
                 raw = self.store.embeddings.get(str(row[id_key]))
-                if raw is None:
-                    continue
+            if usable_query and raw is not None:
                 embedding = np.asarray(raw, dtype=float)
-                if (embedding.shape != vector.shape or not np.isfinite(embedding).all()
-                        or np.linalg.norm(embedding) == 0):
-                    continue
-                score = float(np.dot(vector, embedding) / (np.linalg.norm(vector) * np.linalg.norm(embedding)))
-                scored.append({**row, "similarity": score, "retrieval_method": "embedding_cosine"})
-        method = "embedding_cosine" if scored else "lexical_fallback"
-        if not scored:
-            query_tokens = _tokens(params.get("query_text", ""))
-            for row in candidates:
+                if (embedding.shape == vector.shape and np.isfinite(embedding).all() and np.linalg.norm(embedding) > 0):
+                    score = float(np.dot(vector, embedding) / (np.linalg.norm(vector) * np.linalg.norm(embedding)))
+            if attribute and score is None:
+                continue
+            method = "embedding_cosine" if score is not None else "lexical_fallback"
+            if score is None:
                 words = _tokens(" ".join(str(row.get(field, "")) for field in text_fields))
-                overlap = len(query_tokens & words) / math.sqrt(max(1, len(query_tokens) * len(words)))
-                scored.append({**row, "similarity": overlap, "retrieval_method": method})
+                score = len(query_tokens & words) / math.sqrt(max(1, len(query_tokens) * len(words)))
+            scored.append({**row, "similarity": score, "retrieval_method": method})
+        methods = {row["retrieval_method"] for row in scored}
+        method = next(iter(methods)) if len(methods) == 1 else "hybrid" if methods else "lexical_fallback"
         scored.sort(key=lambda row: (-row["similarity"], str(row[id_key])))
         return scored, method
 
@@ -219,19 +227,44 @@ class LocalBackend:
                           for row in self._memory_before(cutoff))
         ranked, method = self._rank(candidates, params, "case_id",
                                     ("analyst_notes", "summary", "pattern", "card_id", "customer_id"))
-        # Feature relationships are only a fallback when no vector retrieval ran.
-        if method == "lexical_fallback" and any(params.get(key) for key in ("card_id", "device_id", "region_id")):
-            related = self._query_prior_cases({**params, "limit": 1000})
-            scores = {row["case_id"]: row["relationship_score"] / 7
-                      for row in related["cases"] + related["memory"]}
+        # A partially populated vector index must never exclude unembedded
+        # candidates. Compare their graph links and pattern independently.
+        if any(params.get(key) for key in ("card_id", "device_id", "region_id", "pattern")):
+            txns = self.transactions[self.transactions.epoch.le(cutoff)]
+            device_cases = self._case_ids_for(txns.loc[txns.device_profile.eq(params["device_id"]), "txn_id"]) if params.get("device_id") else set()
+            region_cases = self._case_ids_for(txns.loc[txns.region.eq(params["region_id"]), "txn_id"]) if params.get("region_id") else set()
             for row in ranked:
-                row["similarity"] = 0.5 * row["similarity"] + 0.5 * scores.get(row["case_id"], 0)
+                basis = []
+                if params.get("card_id") and row.get("card_id") == params["card_id"]:
+                    basis.append("shared_card")
+                if row["case_id"] in device_cases:
+                    basis.append("shared_device")
+                if row["case_id"] in region_cases:
+                    basis.append("shared_region")
+                pattern = row.get("pattern")
+                if row["memory_source"] == "investigated_case":
+                    _, devices, regions = self._memory_entities(row, cutoff)
+                    if params.get("device_id") in devices:
+                        basis.append("shared_device")
+                    if params.get("region_id") in regions:
+                        basis.append("shared_region")
+                    answer = row.get("answer") or json.loads(row.get("answer_json") or "{}")
+                    pattern = answer.get("case", {}).get("pattern")
+                weights = {"shared_card": 4, "shared_device": 2, "shared_region": 1, "same_pattern": 2}
+                if params.get("pattern") and pattern == params["pattern"]:
+                    basis.append("same_pattern")
+                row["retrieval_basis"] = basis
+                if row["retrieval_method"] != "embedding_cosine":
+                    row["similarity"] = .2 * row["similarity"] + .8 * sum(weights[b] for b in basis) / 9
+                    row["retrieval_method"] = "graph_fallback"
             ranked.sort(key=lambda row: (-row["similarity"], row["case_id"]))
+            methods = {row["retrieval_method"] for row in ranked}
+            method = next(iter(methods)) if len(methods) == 1 else "hybrid" if methods else "graph_fallback"
         hits = ranked[:max(0, min(int(params.get("k", 5)), 100))]
-        return {"cases": [row for row in hits if row["memory_source"] == "closed_case"],
+        return {"hits": hits, "cases": [row for row in hits if row["memory_source"] == "closed_case"],
                 "memory": [row for row in hits if row["memory_source"] == "investigated_case"],
                 "retrieval_method": method, "eligible_case_count": len(candidates),
-                "embedded_candidate_count": len(ranked) if method == "embedding_cosine" else 0}
+                "embedded_candidate_count": sum(row["retrieval_method"] == "embedding_cosine" for row in ranked)}
 
     def _query_get_documents(self, params: dict) -> dict:
         documents = []
@@ -250,6 +283,10 @@ class LocalBackend:
             documents.append({**row, "doc_id": doc_id})
         ranked, method = self._rank(documents, params, "doc_id", ("text_data", "text", "title", "source_id"))
         return {"documents": ranked[:max(0, int(params.get("k", len(ranked))))], "retrieval_method": method}
+
+    def _query_search_documents(self, params: dict) -> dict:
+        result = self._query_get_documents(params)
+        return {**result, "hits": result["documents"]}
 
     def _query_write_document(self, params: dict) -> dict:
         row = {key: str(params[key]) for key in ("doc_id", "source_id", "text_data")}
