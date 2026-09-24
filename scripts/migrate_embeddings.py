@@ -7,6 +7,7 @@ import argparse
 from pathlib import Path
 import re
 import uuid
+import time
 
 from agent.embeddings import index_lock, index_specs, register_index
 from agent.model_registry import discover
@@ -81,6 +82,14 @@ def install_queries(docker, names, log, *, resume=False, restart_every=0):
             # Explicit operator option for the memory-constrained Docker VM.
             gadmin = str(Path(GSQL).with_name('gadmin'))
             run([*docker, gadmin, 'restart', 'gsql', '-y'], log)
+            for attempt in range(24):
+                try:
+                    run([*docker, GSQL, 'USE GRAPH FraudGraph\nLS'], log)
+                    break
+                except RuntimeError:
+                    if attempt == 23:
+                        raise
+                    time.sleep(5)
     final = installed_queries(run([*docker, GSQL, 'USE GRAPH FraudGraph\nLS'], log))
     if not set(names) <= final:
         raise RuntimeError('Query installation incomplete: ' + ', '.join(sorted(set(names) - final)))
