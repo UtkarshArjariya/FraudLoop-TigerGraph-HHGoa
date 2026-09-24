@@ -93,6 +93,8 @@ async def request_vectors(rows: list[EmbedRow], status: dict, provider) -> list[
             raise ValueError("Expected one finite unit-length 768-dimensional vector per text")
         return vectors
     except Exception as exc:
+        if isinstance(provider, LocalGemmaEmbedder):
+            status["provider_unavailable"] = True
         report_error(exc, [row.vertex_id for row in rows], status)
         raise
 
@@ -219,8 +221,11 @@ async def ingest_index(args, spec, store, graph=None):
                 store.save(args.store)
             checkpoint(ids_path, [row.vertex_id for row, _ in group], completed)
             status["newly_completed"] += len(group)
+            print(f"{spec.key}: persisted {sum(row.vertex_id in completed for row in rows)}/{len(rows)} selected vectors", flush=True)
 
     try:
+        if provider.model_id != spec.model_id:
+            raise ModelMismatch("Embedding provider differs from the destination index")
         for doc in store.documents:
             if doc["doc_id"] not in completed:
                 await graph.call("write_document", doc)
@@ -246,7 +251,7 @@ async def ingest_index(args, spec, store, graph=None):
                 if ready:
                     await commit(ready)
                 missing = [r for r in batch if r.vertex_id not in cached]
-                if not missing:
+                if not missing or getattr(args, "cached_only", False):
                     continue
                 if not first_request and isinstance(provider, GeminiEmbedder):
                     await asyncio.sleep(BATCH_DELAY)
@@ -280,8 +285,8 @@ async def run(args):
     mode = args.provider or os.getenv("EMBED_PROVIDER", "all")
     mode = {"auto": "all", "local": "bge", "gemini": "gem001"}.get(mode, mode)
     # Discovery is skipped in dry runs, which are strictly offline.
-    registry = None if args.dry_run else await asyncio.to_thread(discover, refresh=args.refresh_models)
-    if args.dry_run:
+    registry = None if args.dry_run or getattr(args, "cached_only", False) else await asyncio.to_thread(discover, refresh=args.refresh_models)
+    if args.dry_run or getattr(args, "cached_only", False):
         try:
             registry = json.loads(Path(os.getenv("MODEL_REGISTRY_PATH", "data/model_registry.json")).read_text())
         except (OSError, ValueError):
@@ -301,7 +306,7 @@ async def run(args):
                 for spec in specs:
                     result = await ingest_index(args, spec, store, graph)
                     results.append(result)
-                    if spec.provider == "gemma" and result["aborted"] and mode == "gemma":
+                    if spec.provider == "gemma" and result.get("provider_unavailable") and mode == "gemma":
                         # A fallback always writes to BGE's own index.
                         bge = selected_specs("bge", local, registry=registry)[0]
                         print("EmbeddingGemma unavailable; continuing in the separate BGE index.", flush=True)
@@ -320,6 +325,7 @@ def main():
     parser.add_argument("--local", action="store_true", help="Use a separate local graph backend/checkpoint")
     parser.add_argument("--provider", choices=("gemma", "bge", "gem001", "gem2", "all"))
     parser.add_argument("--refresh-models", action="store_true")
+    parser.add_argument("--cached-only", action="store_true", help="Restore cached vectors without embedding API calls or model downloads")
     args = parser.parse_args()
     result = asyncio.run(run(args))
     if result["aborted"]:
