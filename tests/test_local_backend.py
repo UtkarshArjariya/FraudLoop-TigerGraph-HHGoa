@@ -25,7 +25,10 @@ def backend():
         {"case_id": "CC-2", "card_id": "C2-K1", "customer_id": "C2", "closed_at": "1970-01-01 00:06:40", "outcome": "confirmed_fraud", "txn_ids": "T3", "analyst_notes": "Card testing stolen phone", "pattern": "card_testing"},
     ])
     pack = pd.DataFrame([{"case_id": "HHG-1", "flagged_txn_id": "T2"}])
-    return LocalBackend(TransactionStore(txns, history, pack, {}))
+    store = TransactionStore(txns, history, pack, {})
+    store.embedding_model_id = "test-model"
+    store.embedding_models = {"CC-1": "test-model", "CC-2": "test-model"}
+    return LocalBackend(store)
 
 
 def test_windows_respect_cutoff_and_baseline_excludes_flagged(backend):
@@ -40,11 +43,11 @@ def test_prior_and_vector_retrieval_never_reveal_future_outcomes(backend):
     backend.store.embeddings = {"CC-1": [0.0, 1.0], "CC-2": [1.0, 0.0]}
     prior = call(backend, "prior_cases", card_id="C2-K1", device_id="phone", region_id="away", as_of=250)
     assert [row["case_id"] for row in prior["cases"]] == ["CC-1"]
-    found = call(backend, "similar_cases", query_vec=[1.0, 0.0], as_of=250, k=5)
+    found = call(backend, "similar_cases", query_vec=[1.0, 0.0], embed_model="test-model", as_of=250, k=5)
     assert [row["case_id"] for row in found["cases"]] == ["CC-1"]
     assert found["retrieval_method"] == "embedding_cosine"
     assert found["cases"][0]["similarity"] == 0.0
-    found = call(backend, "similar_cases", query_vec=[1.0, 0.0], as_of=500, k=1)
+    found = call(backend, "similar_cases", query_vec=[1.0, 0.0], embed_model="test-model", as_of=500, k=1)
     assert found["cases"][0]["case_id"] == "CC-2"
 
 
@@ -89,3 +92,30 @@ def test_case_library_and_document_retrieval_filter_future_history(backend):
     assert [row["doc_id"] for row in docs["documents"]] == ["policy"]
     docs = call(backend, "get_documents", query_text="card testing", as_of=500, k=10)
     assert [row["doc_id"] for row in docs["documents"]] == ["future-note", "policy"]
+
+
+def test_partial_vectors_keep_graph_matches_and_label_each_candidate(backend):
+    backend.store.embeddings = {"CC-2": [-1.0, 0.0]}
+    found = call(backend, "similar_cases", query_vec=[1.0, 0.0], embed_model="test-model", as_of=500, k=2,
+                 card_id="C1-K1", device_id="phone", region_id="home", pattern="none")
+    assert found["retrieval_method"] == "hybrid"
+    assert found["embedded_candidate_count"] == 1
+    assert found["hits"][0]["case_id"] == "CC-1"
+    assert found["hits"][0]["retrieval_method"] == "graph_fallback"
+    assert set(found["hits"][0]["retrieval_basis"]) == {"shared_card", "shared_device", "shared_region", "same_pattern"}
+    assert found["hits"][1]["retrieval_method"] == "embedding_cosine"
+
+
+def test_zero_vector_falls_back_and_future_cases_stay_excluded(backend):
+    backend.store.embeddings = {"CC-1": [0.0, 0.0], "CC-2": [1.0, 0.0]}
+    found = call(backend, "similar_cases", query_vec=[1.0, 0.0], embed_model="test-model", as_of=250, k=5, pattern="none")
+    assert [row["case_id"] for row in found["hits"]] == ["CC-1"]
+    assert found["hits"][0]["retrieval_method"] == "graph_fallback"
+
+
+def test_mismatched_model_never_uses_cosine(backend):
+    backend.store.embeddings = {'CC-1': [1., 0.]}
+    found = call(backend, 'similar_cases', query_vec=[1., 0.], embed_model='wrong',
+                 as_of=250, k=5, card_id='C1-K1')
+    assert found['retrieval_method'] == 'graph_fallback'
+    assert found['embedded_candidate_count'] == 0
