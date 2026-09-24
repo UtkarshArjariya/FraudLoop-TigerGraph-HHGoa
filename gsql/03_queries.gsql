@@ -46,26 +46,14 @@ FOR GRAPH FraudGraph {
   cases = direct_cases UNION device_cases UNION region_cases;
   memory_cases = SELECT f FROM FraudCase:f
     WHERE f.card_id == card_id AND f.opened_epoch < as_of;
-  PRINT cases, memory_cases;
-}
-
-CREATE OR REPLACE QUERY similar_cases(LIST<FLOAT> query_vec, INT as_of, INT k)
-FOR GRAPH FraudGraph SYNTAX v3 {
-  MapAccum<VERTEX, FLOAT> @@distances;
-  closed = SELECT c FROM ClosedCase:c WHERE datetime_to_epoch(c.closed_at) <= as_of;
-  earlier = SELECT f FROM FraudCase:f WHERE f.opened_epoch < as_of;
-  candidates = closed UNION earlier;
-  hits = vectorSearch({ClosedCase.embedding, FraudCase.embedding}, query_vec, k,
-    {candidate_set: candidates, distance_map: @@distances});
-  PRINT hits;
-  PRINT @@distances AS distances;
+  PRINT cases, memory_cases, direct_cases, device_cases, region_cases;
 }
 
 CREATE OR REPLACE QUERY write_case(STRING case_id, STRING customer_id, STRING card_id,
   INT opened_epoch, STRING verdict, STRING summary, STRING answer_json)
 FOR GRAPH FraudGraph {
   INSERT INTO FraudCase VALUES (case_id, customer_id, card_id, opened_epoch,
-    verdict, summary, answer_json);
+    verdict, summary, answer_json, "");
   INSERT INTO InvestigatesCard VALUES (case_id, card_id);
   PRINT case_id;
 }
@@ -83,7 +71,7 @@ CREATE OR REPLACE QUERY case_library(INT as_of) FOR GRAPH FraudGraph {
 
 CREATE OR REPLACE QUERY write_document(STRING doc_id, STRING source_id, STRING text_data)
 FOR GRAPH FraudGraph {
-  INSERT INTO DocChunk VALUES (doc_id, source_id, text_data);
+  INSERT INTO DocChunk VALUES (doc_id, source_id, text_data, "");
   PRINT doc_id;
 }
 
@@ -114,6 +102,96 @@ CREATE OR REPLACE QUERY tg_wcc(INT max_iter = 100) FOR GRAPH FraudGraph {
   PRINT vertices.size() AS vertex_count;
   PRINT @@component_ids.size() AS component_count;
   PRINT @@changed AS needs_more_iterations;
+}
+
+// MODEL INDEX QUERIES
+
+CREATE OR REPLACE QUERY similar_cases_gem001(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  closed = SELECT c FROM ClosedCase:c WHERE datetime_to_epoch(c.closed_at) <= as_of AND covered_ids.contains(c.case_id);
+  earlier = SELECT f FROM FraudCase:f WHERE f.opened_epoch < as_of AND covered_ids.contains(f.case_id);
+  candidates = closed UNION earlier;
+  hits = vectorSearch({ClosedCase.embedding, FraudCase.embedding}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY search_documents_gem001(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  candidates = SELECT d FROM DocChunk:d WHERE covered_ids.contains(d.doc_id);
+  hits = vectorSearch({DocChunk.embedding}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY similar_cases_gem2(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  closed = SELECT c FROM ClosedCase:c WHERE datetime_to_epoch(c.closed_at) <= as_of AND covered_ids.contains(c.case_id);
+  earlier = SELECT f FROM FraudCase:f WHERE f.opened_epoch < as_of AND covered_ids.contains(f.case_id);
+  candidates = closed UNION earlier;
+  hits = vectorSearch({ClosedCase.emb_gem2, FraudCase.emb_gem2}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY search_documents_gem2(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  candidates = SELECT d FROM DocChunk:d WHERE covered_ids.contains(d.doc_id);
+  hits = vectorSearch({DocChunk.emb_gem2}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY similar_cases_gemma(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  closed = SELECT c FROM ClosedCase:c WHERE datetime_to_epoch(c.closed_at) <= as_of AND covered_ids.contains(c.case_id);
+  earlier = SELECT f FROM FraudCase:f WHERE f.opened_epoch < as_of AND covered_ids.contains(f.case_id);
+  candidates = closed UNION earlier;
+  hits = vectorSearch({ClosedCase.emb_gemma, FraudCase.emb_gemma}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY search_documents_gemma(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  candidates = SELECT d FROM DocChunk:d WHERE covered_ids.contains(d.doc_id);
+  hits = vectorSearch({DocChunk.emb_gemma}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY similar_cases_bge(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  closed = SELECT c FROM ClosedCase:c WHERE datetime_to_epoch(c.closed_at) <= as_of AND covered_ids.contains(c.case_id);
+  earlier = SELECT f FROM FraudCase:f WHERE f.opened_epoch < as_of AND covered_ids.contains(f.case_id);
+  candidates = closed UNION earlier;
+  hits = vectorSearch({ClosedCase.emb_bge, FraudCase.emb_bge}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY search_documents_bge(LIST<FLOAT> query_vec, INT as_of, INT k, SET<STRING> covered_ids)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  candidates = SELECT d FROM DocChunk:d WHERE covered_ids.contains(d.doc_id);
+  hits = vectorSearch({DocChunk.emb_bge}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
 }
 
 INSTALL QUERY ALL
