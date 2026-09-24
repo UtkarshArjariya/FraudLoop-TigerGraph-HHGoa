@@ -23,6 +23,9 @@ class TransactionStore:
         self.case_memory: dict[str, dict] = {}
         self.documents: list[dict] = []
         self.embeddings: dict[str, list[float]] = {}
+        self.embedding_indexes: dict[str, dict[str, list[float]]] = {}
+        self.embedding_model_id = ""
+        self.embedding_models: dict[str, str] = {}
 
     def save(self, path: str | Path) -> None:
         path = Path(path)
