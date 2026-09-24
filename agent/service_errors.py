@@ -9,7 +9,7 @@ def exception_message(exc: Exception) -> str:
     prefix = " ".join(str(value) for value in (getattr(exc, "code", ""), getattr(exc, "status", "")) if value)
     if prefix and not message.startswith(prefix):
         message = f"{prefix}: {message}"
-    for name in ("GEMINI_API_KEY", "GEMINI_EMBEDDING"):
+    for name in ("GEMINI_API_KEY", "GEMINI_EMBEDDING", "HF_TOKEN"):
         secret = os.getenv(name, "")
         if secret:
             message = message.replace(secret, "[REDACTED]")
