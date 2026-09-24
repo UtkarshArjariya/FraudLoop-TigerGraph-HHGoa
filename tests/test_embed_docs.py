@@ -243,3 +243,19 @@ def test_gemma_download_failure_uses_separate_bge_index(environment):
     assert all(p['model_id'] == embeddings.LOCAL_MODEL for _, batch in e.uploads for p in batch)
     assert not embeddings.covered_ids(embeddings.BASE_INDEXES[2])
     assert embeddings.covered_ids(embeddings.BASE_INDEXES[3]) == {'D0'}
+
+
+def test_missing_legacy_attribute_restores_cached_vectors_without_api_calls(environment):
+    e = environment
+    spec = embeddings.BASE_INDEXES[0]
+    embeddings.LEGACY_CHECKPOINT.write_text('D0\n')
+    embeddings.register_index(spec, legacy_recovery_required=True)
+    e.args.cached_only = True
+    module.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    (module.CACHE_DIR / 'gemini-embedding-001-768.json').write_text(json.dumps({'D0': VECTOR}))
+    e.monkeypatch.setattr(module.GeminiEmbedder, 'embed', lambda *args, **kwargs: pytest.fail('must use cache'))
+    assert not embeddings.covered_ids(spec)
+    result = asyncio.run(module.run(e.args))['indexes'][0]
+    assert result['newly_completed'] == 1 and not result['aborted']
+    assert embeddings.covered_ids(spec) == {'D0'}
+    assert embeddings.LEGACY_CHECKPOINT.read_text() == 'D0\n'
