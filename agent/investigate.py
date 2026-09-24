@@ -12,7 +12,8 @@ from typing import Callable
 import pandas as pd
 
 from agent.assess import Assessment, assess, choose_request, evidence, reassess, simulate_response
-from agent.embeddings import configured, embed_batch
+from agent.embeddings import index_specs, index_lock, covered_ids, provider_for, embed_vectors, checkpoint_path
+from agent.retrieval import retrieve_indexes, graph_paths
 from agent.mcp_client import GraphClient, GraphError
 from agent.policy import PolicyContext, recommend, stopping_reason
 
@@ -111,26 +112,19 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
     library = await graph.call("case_library", {"as_of": as_of})
     docs_result = await graph.call("get_documents", {})
     documents = docs_result.get("documents", [])
-    vector_scores = None
-    if configured():
-        try:
-            query_text = f"{case['trigger_type']}: {case['trigger_text']} Device {profile}; channel {flag['channel']}; product {flag['product']}."
-            query_vector = (await asyncio.to_thread(embed_batch, [query_text], query=True))[0]
-            retrieved = await graph.call("similar_cases", {"query_vec": query_vector, "as_of": as_of, "k": 30})
-            hits = retrieved.get("hits", [])
-            vector_scores = {row["case_id"]: 1/(i+1) for i, row in enumerate(hits) if "case_id" in row}
-        except Exception as exc:
-            trace["warnings"].append(f"Semantic retrieval unavailable ({type(exc).__name__}); using graph and lexical retrieval.")
+    query_text = f"{case['trigger_type']}: {case['trigger_text']} Device {profile}; channel {flag['channel']}; product {flag['product']}."
+    vector_rankings, documents = await retrieve_indexes(graph, query_text, as_of, library, documents, trace)
+    paths = graph_paths(prior)
     state("ASSESS")
     initial = assess(case, flag, window, baseline.get("transactions", []), ring.get("transactions", []),
-                     library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_scores=vector_scores)
+                     library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths)
     earliest = min(int(row["epoch"]) for row in initial.episode)
     if earliest < int(flag["epoch"]) - 48*3600:
         # A graph-expanded episode may start before the flagged-card window.
         # Recompute its reference history without any identified episode rows.
         clean_baseline = [row for row in baseline.get("transactions", []) if int(row["epoch"]) < earliest]
         initial = assess(case, flag, window, clean_baseline, ring.get("transactions", []),
-                         library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_scores=vector_scores)
+                         library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths)
     earlier_memory = library.get("memory", [])
     if earlier_memory:
         initial.evidence.append(evidence(
@@ -139,6 +133,8 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
     if not documents:
         trace["warnings"].append("No graph policy documents were returned; using the versioned dataset policy encoded in code.")
     trace["retrieved_document_ids"] = [doc.get("doc_id", "") for doc in documents]
+    trace["retrieval_methods"] = {row["case_id"]: row["retrieval_method"] for row in initial.precedents}
+    trace["precedent_retrieval"] = [{k: row[k] for k in ("case_id", "fused_score", "provenance") if k in row} for row in initial.precedents]
     trace["retrieved_memory_ids"] = [row["case_id"] for row in earlier_memory]
     trace["initial_families"] = initial.families
     trace["initial_probability"] = initial.probability
@@ -190,6 +186,8 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
               "closed_fraud" if result.verdict == "fraud" else "open")
     answer = {
         "case_id": case["case_id"],
+        "metadata": {"llm_model_used": trace.get("llm_model_used", "template"),
+                     "llm_attempts": trace.get("llm_attempts", 0)},
         "case": {"status": status, "verdict": result.verdict, "fraud_probability": result.probability,
                  "pattern": result.pattern, "pattern_description": words["pattern_description"] if result.pattern == "undocumented" else "",
                  "affected_txn_ids": [str(row["txn_id"]) for row in rows],
@@ -223,12 +221,26 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
     })
     answer["case"]["written_to_graph"] = not graph.use_local
     answer["case"]["graph_case_id"] = case["case_id"] if not graph.use_local else ""
-    if configured():
-        try:
-            vector = (await asyncio.to_thread(embed_batch, [words["summary"]]))[0]
-            await graph.upsert_vectors("FraudCase", [{"vertex_id": case["case_id"], "vector": vector}])
-        except Exception as exc:
-            trace["warnings"].append(f"Case text stored; embedding unavailable ({type(exc).__name__}).")
+    try:
+        with index_lock(graph.use_local, exclusive=True):
+            for spec in index_specs(graph.use_local):
+                completed = covered_ids(spec, graph.use_local)
+                if not completed:
+                    continue
+                try:
+                    vector = (await embed_vectors(provider_for(spec.model_id), [words["summary"]]))[0]
+                    await graph.upsert_vectors("FraudCase", [{"vertex_id": case["case_id"], "vector": vector,
+                                                "model_id": spec.model_id, "attributes": {}}], attribute=spec.attribute)
+                    if graph.use_local:
+                        # run_cases persists the store at the end; avoid a checkpoint
+                        # claiming a local write before its store is durable.
+                        continue
+                    from scripts.embed_docs import checkpoint
+                    checkpoint(checkpoint_path(spec, graph.use_local), [case["case_id"]], completed)
+                except Exception as exc:
+                    trace["warnings"].append(f"Case text stored; {spec.key} embedding unavailable ({type(exc).__name__}).")
+    except Exception as exc:
+        trace["warnings"].append(f"Case text stored; embedding indexes busy ({type(exc).__name__}).")
     state("ANSWER")
     answer["tool_calls"] = graph.tool_calls-call_start
     answer["latency_s"] = round(time.perf_counter()-started, 4)
