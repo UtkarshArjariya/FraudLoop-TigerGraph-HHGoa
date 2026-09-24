@@ -5,9 +5,12 @@ calls pyTigerGraph or HTTP directly. USE_LOCAL=1 explicitly selects the fallback
 """
 from __future__ import annotations
 
+from agent.embeddings import require_index, normalize as normalize_vectors, ModelMismatch
+
 import asyncio
 from contextlib import AsyncExitStack
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -58,6 +61,25 @@ def normalize(value: Any) -> Any:
     return value
 
 
+def vector_similarities(result: dict) -> dict[str, float]:
+    """Use actual cosine/distance values, never unordered GSQL set positions."""
+    distances = result.get("distances", {})
+    scores = {}
+    for row in result.get("hits", []):
+        cid = row.get("case_id")
+        if not cid or row.get("retrieval_method") in ("graph_fallback", "lexical_fallback"):
+            continue
+        similarity = None
+        if "similarity" in row:
+            similarity = float(row["similarity"])
+        elif isinstance(distances, dict) and cid in distances:
+            similarity = 1 - float(distances[cid])
+        if similarity is not None and math.isfinite(similarity):
+            # HNSW float rounding can give a tiny negative cosine distance.
+            scores[cid] = min(1.0, max(-1.0, similarity))
+    return scores
+
+
 class GraphClient:
     def __init__(self, *, use_local: bool | None = None, store: TransactionStore | None = None):
         load_dotenv()
@@ -80,6 +102,7 @@ class GraphClient:
         env = os.environ.copy()
         # Do not forward the Gemini secret to a graph-only subprocess.
         env.pop("GEMINI_API_KEY", None)
+        env.pop("GEMINI_EMBEDDING", None)
         server = StdioServerParameters(command=sys.executable,
                                        args=["-m", "tigergraph_mcp.main"], env=env)
         Path("data/runs").mkdir(parents=True, exist_ok=True)
@@ -115,6 +138,16 @@ class GraphClient:
 
     async def call(self, name: str, params: dict | None = None) -> dict:
         params = params or {}
+        if name in ("similar_cases", "search_documents"):
+            params = dict(params)
+            spec = require_index(params.pop("embed_model", ""), params.pop("attribute", ""), self.use_local)
+            if not params.get("covered_ids"):
+                return {"hits": [], "documents": [], "distances": {}}
+            normalize_vectors([params.get("query_vec", [])], 1)
+            if self.use_local:
+                params["embed_model"], params["attribute"] = spec.model_id, spec.attribute
+            else:
+                name += "_" + spec.key
         if self.use_local:
             self.tool_calls += 1
             self.call_log.append({"tool": "local", "query": name})
@@ -135,16 +168,26 @@ class GraphClient:
             return merged
         return result
 
-    async def upsert_vectors(self, vertex_type: str, vectors: list[dict]) -> dict:
+    async def upsert_vectors(self, vertex_type: str, vectors: list[dict], *, attribute: str = "embedding") -> dict:
+        if vertex_type not in ("ClosedCase", "DocChunk", "FraudCase"):
+            raise ModelMismatch("Unsupported vector vertex type")
+        for row in vectors:
+            require_index(row.get("model_id", row.get("attributes", {}).get("embed_model", "")), attribute, self.use_local)
+            normalize_vectors([row["vector"]], 1)
         if self.use_local:
             self.tool_calls += 1
+            if not hasattr(self.store, "embedding_indexes"):
+                self.store.embedding_indexes = {}
+            index = self.store.embedding_indexes.setdefault(attribute, {})
             for row in vectors:
-                self.store.embeddings[str(row["vertex_id"])] = row["vector"]
+                index[str(row["vertex_id"])] = row["vector"]
             return {"success_count": len(vectors), "written_to_graph": False}
+        # model_id is our guard metadata, not a TigerGraph vertex attribute.
+        payload = [{k: v for k, v in row.items() if k != "model_id"} for row in vectors]
         result = await self.tool("upsert_vectors", {"graph_name": self.graph_name,
-            "vertex_type": vertex_type, "vector_attribute": "embedding", "vectors": vectors})
-        if result.get("failed_count", 0) or result.get("errors"):
-            raise GraphError("Some vector upserts failed")
+            "vertex_type": vertex_type, "vector_attribute": attribute, "vectors": payload})
+        if result.get("failed_count", 0) or result.get("errors") or result.get("success_count") != len(vectors):
+            raise GraphError("Vector upsert incomplete; checkpoint must not advance")
         return result
 
 
