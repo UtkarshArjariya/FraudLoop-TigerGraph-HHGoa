@@ -13,6 +13,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from agent.retrieval import reciprocal_rank_fusion, match_label
+
 
 def sigmoid(value: float) -> float:
     return 1 / (1 + math.exp(-value))
@@ -76,7 +78,7 @@ class Assessment:
 
 
 def rank_precedents(cases: list[dict], flag: dict, features: dict, prior_ids: set[str],
-                    vector_scores: dict[str, float] | None = None) -> list[dict]:
+                    vector_scores: dict[str, float] | None = None, *, vector_rankings=None, paths=None) -> list[dict]:
     """Retrieve top five using semantic rank plus concrete graph relationships.
 
 Lexical ranking is explicit when no real query embedding exists. The selected
@@ -84,6 +86,11 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
 """
     ranked = []
     device_name = str(flag.get("DeviceInfo", "")).split(" Build", 1)[0].lower()
+    expected_pattern = ("undocumented" if features["split_burst"] or features["coordinated_device"] else
+                        "card_testing" if features.get("card_testing") else
+                        "none" if features["ordinary_amount"] and features["familiar_product"] else
+                        "card_not_present_new_device" if flag["channel"] == "online" and features.get("new_device") else
+                        "card_not_present_fraud" if flag["channel"] == "online" else "out_of_region_use")
     for case in cases:
         notes = str(case.get("analyst_notes", case.get("summary", ""))).lower()
         pattern = case.get("pattern", "none")
@@ -95,6 +102,9 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
         if case["case_id"] in prior_ids:
             score += .2
             reasons.append("graph card/device/region relationship")
+        if pattern == expected_pattern:
+            score += 1
+            reasons.append("same pattern hypothesis")
         if vector_scores and case["case_id"] in vector_scores:
             score += max(0, vector_scores[case["case_id"]]) * 2
             reasons.append("semantic vector similarity")
@@ -122,14 +132,41 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
                 score += 1.1
         row = dict(case)
         row["similarity_score"] = round(score, 4)
+        row["retrieval_method"] = "vector+graph" if vector_scores is not None and case["case_id"] in vector_scores else "graph_fallback"
         row["retrieval_basis"] = "; ".join(reasons) or "same activity typology in analyst narrative"
         ranked.append(row)
-    return sorted(ranked, key=lambda r: (-r["similarity_score"], r["case_id"]))[:5]
+    ordered = sorted(ranked, key=lambda r: (-r["similarity_score"], r["case_id"]))
+    if vector_rankings is None:
+        return ordered[:5]  # Compatibility for callers without multi-index retrieval.
+    graph_rank = []
+    for row in ordered:
+        basis = list((paths or {}).get(row["case_id"], []))
+        if row.get("card_id") == flag.get("card_id"):
+            basis.append("shared_card")
+        if row.get("pattern") == expected_pattern:
+            basis.append("same_pattern")
+        if basis:
+            graph_rank.append({"id": row["case_id"], "paths": sorted(set(basis))})
+    # Narrative analogues are a distinct retrieval source, never a claimed graph edge.
+    rankings = {**vector_rankings, "graph": graph_rank,
+                "analyst narrative": [row["case_id"] for row in ordered]}
+    fused = reciprocal_rank_fusion(rankings)
+    by_id = {row["case_id"]: row for row in ranked}
+    result = []
+    for hit in fused:
+        if hit["id"] not in by_id:
+            continue  # Generated memory must not influence confirmed-outcome counts.
+        row = by_id[hit["id"]]
+        row.update(similarity_score=hit["fused_score"], fused_score=hit["fused_score"],
+                   provenance=hit["provenance"], retrieval_method="rrf",
+                   retrieval_basis=f"{match_label(hit['provenance'])}; RRF={hit['fused_score']:.6f}")
+        result.append(row)
+    return result[:5]
 
 
 def assess(case: dict, flag: dict, window_rows: list[dict], baseline_rows: list[dict],
            ring_rows: list[dict], historical: list[dict], prior_ids: set[str],
-           *, vector_scores: dict[str, float] | None = None) -> Assessment:
+           *, vector_scores: dict[str, float] | None = None, vector_rankings=None, paths=None) -> Assessment:
     as_of = int(pd.Timestamp(case["opened_at"], tz="UTC").timestamp())
     window = frame(window_rows)
     baseline = frame(baseline_rows)
@@ -178,7 +215,7 @@ def assess(case: dict, flag: dict, window_rows: list[dict], baseline_rows: list[
                     full_profile=full_profile, proxy=proxy, recurring_match=recurring_match,
                     recurring_candidate=recurring_candidate,
                     evidence_conflicts=False, shared_fraud=bool(coordinated_device))
-    precedents = rank_precedents(historical, flag, features, prior_ids, vector_scores)
+    precedents = rank_precedents(historical, flag, features, prior_ids, vector_scores, vector_rankings=vector_rankings, paths=paths)
     families: dict[str, float] = {}
     found: list[dict] = []
     base_refs = baseline.tail(4).txn_id.tolist() if len(baseline) else []
@@ -245,7 +282,7 @@ def assess(case: dict, flag: dict, window_rows: list[dict], baseline_rows: list[
         prior_probability = (1 + fraud_weight / (4665/900)) / (2 + fraud_weight / (4665/900) + clear_weight)
         families["precedent_outcomes"] = float(np.clip(math.log(prior_probability/(1-prior_probability)), -1.2, .8))
         found.append(evidence(
-            "Top-five retrieved precedents: " + "; ".join(f"{p['case_id']} ({p.get('outcome',p.get('verdict','unknown'))}; {p['retrieval_basis']})" for p in precedents)
+            "Top-five retrieved precedents: " + "; ".join(f"{p['case_id']} ({p.get('outcome',p.get('verdict','unknown'))}; retrieval_method={p['retrieval_method']}; {p['retrieval_basis']})" for p in precedents)
             + ". Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
             "document", "retrieval:hybrid_precedents", [p["case_id"] for p in precedents]))
     disputed = case["trigger_type"] == "customer_report"
