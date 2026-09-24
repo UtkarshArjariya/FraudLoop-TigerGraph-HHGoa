@@ -88,3 +88,26 @@ def test_partial_indexes_query_only_covered_temporally_eligible_ids(monkeypatch)
     assert set(providers) == {'gemini-embedding-001', emb.GEMMA_MODEL, emb.LOCAL_MODEL}
     assert len(docs[0]['provenance']) == 4
     assert docs[0]['fused_score'] > 0 and trace['document_retrieval']
+
+
+def test_selected_precedent_weights_do_not_scale_with_index_count():
+    features = {'split_burst': False, 'coordinated_device': False, 'ordinary_amount': True,
+                'familiar_product': True, 'familiar_region': True, 'amount_anomaly': False}
+    cases = [{'case_id': f'CC-{i}', 'card_id': 'C1-K1', 'pattern': 'none', 'outcome': 'cleared'} for i in range(8)]
+    for count in (1, 4):
+        rankings = {f'index{i}': [row['case_id'] for row in cases] for i in range(count)}
+        ranked = rank_precedents(cases, {'card_id': 'C1-K1', 'channel': 'in_person'}, features, set(), vector_rankings=rankings)
+        assert len(ranked) == 5 and abs(sum(row['similarity_score'] for row in ranked) - 5) < 1e-8
+
+
+def test_policy_chunks_linked_to_future_cases_are_excluded():
+    import asyncio
+    from agent.retrieval import retrieve_indexes
+    from types import SimpleNamespace
+    trace = {'warnings': []}
+    _, docs = asyncio.run(retrieve_indexes(SimpleNamespace(use_local=False), 'policy', 100,
+        {'cases': [{'case_id': 'CC-past'}]}, [
+            {'doc_id': 'past', 'source_id': 'CC-past', 'text_data': 'policy'},
+            {'doc_id': 'future', 'source_id': 'CC-future', 'text_data': 'policy'},
+            {'doc_id': 'static', 'source_id': 'HHGOA_IEEE/README.md', 'text_data': 'policy'}], trace))
+    assert {row['doc_id'] for row in docs} == {'past', 'static'}
