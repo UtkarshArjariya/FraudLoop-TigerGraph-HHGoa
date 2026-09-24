@@ -6,6 +6,7 @@ import { activeRole, api, setApiRole } from './api';
 import { EmptyState, ErrorState } from './components';
 import type { Health, Role } from './types';
 import Queue from './pages/Queue';
+import CaseDetail from './pages/CaseDetail';
 export const RoleContext = createContext<{role:Role;setRole:(value:Role)=>void}>({role:'viewer',setRole:()=>{}});
 export const useRole = () => useContext(RoleContext);
 function ServiceHealth() {
@@ -34,6 +35,6 @@ export default function App() {
  return <RoleContext.Provider value={{role,setRole}}><div className="app-shell"><a className="skip-link" href="#main">Skip to content</a>
   <header className="topbar"><Link to="/" className="wordmark" aria-label="FRAUDLOOP home"><Workflow size={27} strokeWidth={2.1} aria-hidden/><span>FRAUDLOOP</span></Link><span className="workspace-name">Investigation console</span><ServiceHealth/><div className="topbar-controls"><label className="sr-only" htmlFor="role">Demo role</label><select id="role" aria-label="Demo role" value={role} onChange={e=>setRole(e.target.value as Role)}><option value="viewer">Viewer</option><option value="analyst_l1">Analyst · L1</option><option value="supervisor_l2">Supervisor · L2</option></select><button className="icon-button" aria-label={theme==='dark'?'Switch to light theme':'Switch to dark theme'} onClick={()=>{const next=theme==='dark'?'light':'dark';setTheme(next);localStorage.setItem('fraudloop-theme',next);}}>{theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}</button></div></header>
   <aside className="sidebar"><nav aria-label="Main navigation"><NavLink to="/" end><LayoutList size={18} aria-hidden/>Case queue</NavLink><NavLink to="/approvals"><CheckCheck size={18} aria-hidden/>Approvals</NavLink><NavLink to="/memory"><Database size={18} aria-hidden/>Case memory</NavLink></nav><div className="sidebar-note"><ShieldCheck size={20} aria-hidden/><strong>Policy led. Evidence first.</strong><p>Bank actions remain recommendations until approved. No external actions are executed.</p><span className="demo-label">Local demo roles</span></div><div className="sidebar-bottom"><Activity size={14} aria-hidden/>HHGOA · IEEE-CIS 2016</div></aside>
-  <ErrorBoundary><main className="workspace" id="main"><Routes><Route path="/" element={<Queue/>}/><Route path="*" element={<EmptyState title="Page unavailable"><Link to="/">Return to the case queue</Link></EmptyState>}/></Routes></main></ErrorBoundary>
+  <ErrorBoundary><main className="workspace" id="main"><Routes><Route path="/" element={<Queue/>}/><Route path="/cases/:id" element={<CaseDetail/>}/><Route path="*" element={<EmptyState title="Page unavailable"><Link to="/">Return to the case queue</Link></EmptyState>}/></Routes></main></ErrorBoundary>
  </div></RoleContext.Provider>;
 }
