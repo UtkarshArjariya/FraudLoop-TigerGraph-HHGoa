@@ -1,0 +1,10 @@
+# Opt-in local workstation graph control. This socket grants Docker-daemon
+# access, including the one GSE restart allowed by the backend write guard.
+# The existing TigerGraph container must be named tg; no graph service is created.
+services:
+  backend:
+    user: "0:0"
+    environment:
+      FRAUDLOOP_LOCAL_ONLY: "0"
+    volumes:
+      - "${FRAUDLOOP_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock"

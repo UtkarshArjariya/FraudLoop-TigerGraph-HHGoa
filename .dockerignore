@@ -1,0 +1,34 @@
+# Allow only application/build sources into either image context.
+**
+!pyproject.toml
+!agent/
+!agent/**
+!scripts/
+!scripts/**
+!backend/
+!backend/**
+!frontend/
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/tsconfig.json
+!frontend/vite.config.ts
+!frontend/tailwind.config.js
+!frontend/postcss.config.js
+!frontend/nginx.conf
+!frontend/Dockerfile
+!frontend/src/
+!frontend/src/**
+!frontend/public/
+!frontend/public/**
+# Re-exclude caches/credentials even if they appear under an allowed directory.
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/node_modules/
+**/.pytest_cache/
+**/*.pkl
+**/*.csv

@@ -4,7 +4,145 @@ FRAUDLOOP investigates the 20 HHGOA fraud alerts using TigerGraph evidence, hist
 
 All bank actions are recommendations. Additional customer, step-up, and analyst responses are disclosed deterministic simulations. Generated case memory is an earlier agent conclusion, not a confirmed historical bank outcome. Evidence is bounded by each case's `opened_at`; original Kaggle fraud labels are never used.
 
-## Setup
+The preserved graded answers contain **9 fraud, 8 legitimate and 3 uncertain judgments, with 2 SAR recommendations**. All 20 passed schema, dataset-ID, exposure, chronology, route and policy validation at the overnight baseline. These are policy-engine judgments, not measured accuracy against the hidden answer key. See [the complete policy audit](docs/policy-audit.md), [the blog draft](docs/blog.md), [the four-minute video script](docs/video-script.md), and [the morning delivery report](docs/MORNING_REPORT.md).
+
+## Start the analyst console
+
+Requirements: Python 3.12, Node.js 22 (or another Vite-supported Node version), npm, Bash, and `setsid` from util-linux. Use the existing prepared dataset, `data/transaction_store.pkl`, `data/graph/`, and saved `cases/` files. Do not re-provision the graph or rebuild embeddings merely to open the demo.
+
+```bash
+# Existing checkout: preserve .env and all prepared data.
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+npm --prefix frontend ci
+# Fresh checkout only: create .env if it does not exist, then configure locally.
+test -f .env || cp .env.example .env
+make demo
+```
+
+Open **http://localhost:5173**. The backend is **http://127.0.0.1:8000**, with interactive API documentation at **http://127.0.0.1:8000/docs**. The Vite server proxies `/api` to port 8000. `make demo` starts one backend worker and the frontend, refuses occupied ports, and stops its own process groups when either server exits or you press Ctrl+C. It does not terminate unrelated processes.
+
+Use **Replay** on HHG-014 for graph expansion and SAR routing, and on HHG-002 for a changed recommendation after simulated confirmation. Saved replay events require no graph or model calls. Some events reconstructed from older traces are labeled as reconstructed and have no measured per-tool duration; fresh live runs capture actual tool events. For an entirely local demo, including graph-neighborhood reads:
+
+```bash
+FRAUDLOOP_LOCAL_ONLY=1 make demo
+```
+
+The **Run live** control starts the real state machine. It uses official MCP graph operations when available and truthful local fallback otherwise. A successful API run atomically saves `data/runtime_cases/<case_id>.json` as a snapshot envelope containing `answer`, `trace`, `timeline`, and `run_id`; the stream emits `done` only after that snapshot is saved. The API unwraps its answer and serves the matching trace/replay. Failed attempts are stored separately under `data/runtime_failed_timelines/<case_id>-<run_id>.json`, preserving the last successful snapshot and committed replay. Legacy separate `data/runtime_traces/` and `data/runtime_timelines/` files remain readable. Graded `cases/` files and committed timelines are never overwritten by API runs. A successful runtime answer takes precedence in the console, with its source labeled. New trigger creation first queues a retrospective case; opening the returned POST stream starts its investigation.
+
+Backend narration defaults to templates. Set `FRAUDLOOP_ENABLE_LLM=1` before starting the backend to enable the configured Gemini chain; attempts are capped at 60 in the persistent `data/api_llm_budget.json`. Do not clear that file during a quota-limited run. Replay never spends that budget. Model-backed retrieval in a live run may also need the relevant query embedding provider and quota; replay is the dependable recording path.
+
+| Target | Purpose |
+|---|---|
+| `make backend` | Start one FastAPI/uvicorn worker on 127.0.0.1:8000 |
+| `make frontend` | Start Vite on 127.0.0.1:5173 |
+| `make demo` | Start both and clean up both on exit |
+| `make validate` | Validate the 20 graded answer files without changing them |
+| `make test` | Run Python agent/backend tests |
+| `make smoke` | Exercise a running API; creates one queued runtime trigger, uses replay, checks expected viewer 403 |
+| `make cases CASE_ARGS=--no-llm` | Deliberately regenerate graded answers and FraudCase memory after the GSE guard passes |
+
+`make cases` is a writer, not a demo startup step. Its wrapper checks `gadmin status gse`, tries one restart and a 30-second wait only when GSE is down, and skips generation if service health is still down or unknown. It never provisions schema or starts embeddings. Preserve the validated submission before any deliberate regeneration. The overnight build does not regenerate already-valid answers for UI polish.
+
+## Architecture and required components
+
+```mermaid
+flowchart LR
+    UI[React analyst console] --> API[FastAPI]
+    API --> Agent[Investigation state machine]
+    API --> Replay[Saved answers and replay timelines]
+    Agent --> MCP[TigerGraph MCP ClientSession]
+    MCP --> TG["TigerGraph CE 4.2.5"]
+    TG --> Queries[GSQL queries]
+    TG --> WCC[Card-device WCC]
+    TG --> Vectors[Separate vector indexes]
+    Vectors --> RRF[Multi-index RRF retrieval]
+    RRF --> Agent
+    Agent --> Policy[Assessment and policy code]
+    Agent --> Gemini[Guarded Gemini text chain]
+    Agent --> Memory[FraudCase write-back]
+    Memory --> MCP
+```
+
+| Required component | Implementation and evidence |
+|---|---|
+| TigerGraph | `FraudGraph` links Customer, Card, Txn, DeviceProfile, EmailDomain, BillingRegion, ClosedCase, DocChunk and FraudCase vertices. Prepared data contains 205,992 relevant transactions and 5,565 historical cases. |
+| GSQL and algorithms | Installed queries retrieve card windows/baselines, device and region neighborhoods, prior cases, documents, vectors and generated memory. Historical live WCC verification covered 13,831 Card–Device vertices and 4,954 components; connectivity is not itself proof of fraud. |
+| MCP | Runtime graph traffic uses the official TigerGraph MCP server through an MCP `ClientSession`. The backend serializes MCP/live work behind an asyncio lock and runs only one worker. Docker/GSQL is used for administration, not a hidden runtime query path. |
+| GraphRAG | Graph paths and analyst narratives combine with separate 768-dimensional model-owned vector indexes through RRF (`k=60`). Partial indexes remain useful; provenance and temporal eligibility are preserved. |
+| UI | React 18, Vite, TypeScript, Tailwind, TanStack Query, React Router and Cytoscape provide a queue, case detail/timeline, graph, precedents, approvals and memory pages. |
+| Agentic loop | `TRIGGER → GATHER → ASSESS → INITIAL_NBA → REQUEST_EVIDENCE → REASSESS → FINAL_NBA → SAR → WRITE_BACK → ANSWER`, with evidence requests and reassessment omitted when a defensible stopping condition already holds. |
+
+The agent chooses evidence requests around unresolved authorization, exposure and precedent evidence; records initial and final recommendations; enforces policy permissions; and stores completed investigations as retrievable case memory. Risk scores do not anchor its decision. Correlated signals are capped within evidence families, and retrieved historical outcomes are corrected for the fraud-heavy sample.
+
+## API and permissions
+
+| Method and endpoint | Response or effect |
+|---|---|
+| `GET /api/health` | GSE/GPE/RESTPP status, MCP reachability, cached Gemini/quota state and checkpoint coverage; no live text-model probe |
+| `GET /api/cases` | Case queue with verdict, probability, status, SAR and pending approval count |
+| `GET /api/cases/{id}` | Answer, trigger, recorded timeline, family contributions and answer source |
+| `GET /api/cases/{id}/timeline` | Stored or currently running event list |
+| `POST /api/cases/{id}/investigate?mode=replay` | SSE replay of recorded events; no model/graph calls |
+| `POST /api/cases/{id}/investigate?mode=live` | Background investigation streamed through SSE |
+| `POST /api/investigations` | Queue a new `risk_signal`, `customer_report` or `analyst_request`; return its case ID and POST stream URL |
+| `GET /api/cases/{id}/graph` | Bounded graph neighborhood, at most 150 nodes, with labeled local fallback when needed |
+| `GET /api/cases/{id}/precedents` | Earlier closed cases, outcome, available similarity and retrieval provenance |
+| `GET /api/approvals` | Pending L1/L2 recommendations and local audit trail |
+| `POST /api/approvals/{id}` | Record `{ "decision": "approve" or "reject", "note": "..." }`; enforce the `X-Role` permission |
+| `GET /api/memory/stats` | Historical case count, per-index checkpoint coverage, patterns and recurring profiles/regions |
+
+SSE events include `step_started`, `tool_call`, `evidence_added`, `assessment`, `nba_initial`, `evidence_requested`, `evidence_received`, `nba_final`, `sar_drafted`, `case_written`, `done` and `error`. This is a POST stream, so clients use streaming `fetch`, not a GET-only `EventSource`. For example:
+
+```bash
+curl --no-buffer -X POST \
+  'http://127.0.0.1:8000/api/cases/HHG-002/investigate?mode=replay'
+```
+
+The top-bar role switcher sends `X-Role: viewer`, `analyst_l1`, or `supervisor_l2`. Viewer has no approval rights; L1 decides only L1 actions; L2 decides either level. Wrong roles return 403. Decisions persist in `data/approvals.json`, then an audit entry is added to the FraudCase if the GSE write guard passes. A failed graph audit is reported truthfully while retaining the local decision. **The role header is a local demonstration mechanism, not authenticated identity; keep this service on your trusted workstation.**
+
+Approval records do not execute bank actions. Customer/step-up/analyst replies beyond case-pack triggers are disclosed deterministic simulations. No real customer was contacted, card blocked, or SAR sent. Saved answers predate the multi-index retrieval refactor and used template narration; missing historical similarity/provenance is shown as missing rather than fabricated. Generated memory is not confirmed bank truth, and shared coarse profiles or billing-region codes alone do not establish a fraud ring.
+
+## Docker Compose
+
+Compose starts **only the backend and frontend**. The existing TigerGraph container remains `tg`; this project does not create, replace, migrate, or reconfigure it. The default compose configuration uses local/replay mode, exposes only loopback ports, and does not mount the Docker socket.
+
+```bash
+# Check source paths exist before starting: these are preserved operator data.
+test -f .env
+test -f data/transaction_store.pkl
+test -f HHGOA_IEEE/case_pack.csv
+test -d data/timelines
+export FRAUDLOOP_UID="$(id -u)"
+export FRAUDLOOP_GID="$(id -g)"
+docker compose config --quiet
+docker compose build backend
+docker compose build frontend
+docker compose up
+# Stop these services after use:
+docker compose down
+```
+
+Build the images sequentially to limit peak RAM. No container build was needed to validate the Python or frontend source; see the morning report for whether actual images were built in this environment. URLs remain http://localhost:5173 and http://127.0.0.1:8000. Nginx serves the built React app, preserves client-side routes, and proxies `/api` with buffering disabled for SSE.
+
+`.dockerignore` permits application sources only: `.env`, datasets, checkpoints, caches, pickles, graded answers and `node_modules` are excluded from image contexts. `.env` is supplied to the backend at runtime, never copied into an image. The supplied `HHGOA_IEEE/` directory, prepared graph inputs/store, graded cases and committed timelines are mounted read-only. Other `data/` paths remain writable for runtime answers, approvals and quota state. UID/GID settings let the default container write your existing runtime directory without changing its ownership.
+
+For live graph integration, the backend's health and write guard require Docker CLI access to the existing `tg` container. The image includes the CLI, but the daemon socket is **opt-in**:
+
+```bash
+# Native Docker commonly uses this socket; Docker Desktop may use another path.
+export FRAUDLOOP_DOCKER_SOCKET=/var/run/docker.sock
+docker compose -f docker-compose.yml -f docker-compose.graph.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.graph.yml up
+```
+
+The graph override runs the backend as root and mounts the selected daemon socket; this grants it Docker control, including the one permitted GSE restart. Use it only on a trusted local workstation. Find the active socket without exposing credentials with `docker context inspect --format '{{(index .Endpoints "docker").Host}}'`, remove the `unix://` prefix, and set `FRAUDLOOP_DOCKER_SOCKET` accordingly. A Docker Desktop socket must target the daemon that owns `tg`.
+
+Inside Compose, `TG_HOST` defaults to `http://host.docker.internal`, with Linux `host-gateway` mapping, because `localhost` inside the backend is not the existing TigerGraph container. `TG_RESTPP_PORT=9000` and `TG_GS_PORT=14240` remain separate connection settings from `.env`. Set `FRAUDLOOP_COMPOSE_TG_HOST` if your published TigerGraph host differs. Without a working socket/GSE check, graph writes are skipped and reads use a labeled local fallback even if REST is reachable. On Fedora with SELinux-enforced bind mounts, use an appropriately labeled local project directory; avoid recursively relabeling the operator's dataset or Docker socket merely to run a demo.
+
+## Agent and model setup
+
+The following sections retain the existing model/index maintenance workflow. Migration and embedding commands are **not demo prerequisites** and must not be run during the overnight build, whose guardrails prohibit schema changes and embedding jobs. They are documented for a later, deliberate maintenance session.
 
 Use Python 3.12 and the existing TigerGraph Community 4.2.5 `FraudGraph` instance. Runtime graph operations use the official TigerGraph MCP server through `ClientSession`; provisioning uses Docker/GSQL.
 

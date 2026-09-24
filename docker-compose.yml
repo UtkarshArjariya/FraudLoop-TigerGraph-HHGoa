@@ -1,0 +1,48 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    init: true
+    user: "${FRAUDLOOP_UID:-1000}:${FRAUDLOOP_GID:-1000}"
+    env_file:
+      - .env
+    environment:
+      FRAUDLOOP_ROOT: /app
+      FRAUDLOOP_LOCAL_ONLY: "${FRAUDLOOP_LOCAL_ONLY:-1}"
+      FRAUDLOOP_ENABLE_LLM: "${FRAUDLOOP_ENABLE_LLM:-0}"
+      TG_HOST: "${FRAUDLOOP_COMPOSE_TG_HOST:-http://host.docker.internal}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./HHGOA_IEEE:/app/HHGOA_IEEE:ro
+      - ./cases:/app/cases:ro
+      - ./data:/app/data
+      - ./data/graph:/app/data/graph:ro
+      - ./data/transaction_store.pkl:/app/data/transaction_store.pkl:ro
+      - ./data/timelines:/app/data/timelines:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/cases', timeout=5).read()"]
+      interval: 15s
+      timeout: 6s
+      start_period: 15s
+      retries: 3
+    stop_grace_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    init: true
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5173:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
