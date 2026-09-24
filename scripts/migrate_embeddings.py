@@ -77,7 +77,8 @@ def migrate(container, *, registry=None):
         run([*docker, GSQL, script], log)
     base = (ROOT / 'gsql/03_queries.gsql').read_text().split('// MODEL INDEX QUERIES')[0]
     query_file = ROOT / 'data/runs/multi_index_queries.gsql'
-    query_file.write_text(base + vector_queries(specs) + '\nINSTALL QUERY ALL\n')
+    installs = ['prior_cases'] + [name + '_' + spec.key for spec in specs for name in ('similar_cases', 'search_documents')]
+    query_file.write_text(base + vector_queries(specs) + '\n' + '\n'.join('INSTALL QUERY ' + name for name in installs) + '\n')
     run([*docker, 'mkdir', '-p', REMOTE], log)
     run(['docker', 'cp', str(query_file), f'{container}:{REMOTE}/multi_index_queries.gsql'], log)
     run([*docker, GSQL, f'{REMOTE}/multi_index_queries.gsql'], log)
