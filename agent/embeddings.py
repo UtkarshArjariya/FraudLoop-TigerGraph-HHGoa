@@ -232,7 +232,8 @@ def completed_ids(path):
 
 def covered_ids(spec, local=False):
     ids = completed_ids(checkpoint_path(spec, local))
-    if spec.key == "gem001" and not local:
+    recovery = read_indexes(local)["indexes"].get(spec.key, {}).get("legacy_recovery_required", False)
+    if spec.key == "gem001" and not local and not recovery:
         # User confirmed this pre-migration checkpoint contains Gemini 001 only.
         # It remains untouched and is not treated as a live graph inventory.
         ids |= completed_ids(LEGACY_CHECKPOINT)
