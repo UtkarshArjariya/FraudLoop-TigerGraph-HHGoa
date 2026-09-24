@@ -207,8 +207,10 @@ async def ingest_index(args, spec, store, graph=None):
     start_calls = graph.tool_calls
 
     async def commit(pairs):
+        changed = any(cached.get(row.vertex_id) != vector for row, vector in pairs)
         cached.update({row.vertex_id: vector for row, vector in pairs})
-        atomic_json(cache_path, cached)  # Paid results survive graph upload failures.
+        if changed:
+            atomic_json(cache_path, cached)  # Paid results survive graph upload failures.
         for vertex_type in dict.fromkeys(row.vertex_type for row, _ in pairs):
             group = [(row, vec) for row, vec in pairs if row.vertex_type == vertex_type]
             payload = [{"vertex_id": row.vertex_id, "vector": vector,
