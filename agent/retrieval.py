@@ -68,6 +68,8 @@ def sorted_vector_hits(result, *, id_key, allowed):
 
 async def retrieve_indexes(graph, query_text, as_of, library, documents, trace):
     case_ids = {row["case_id"] for row in library.get("cases", []) + library.get("memory", [])}
+    documents = [row for row in documents if not str(row.get("source_id", "")).split("#", 1)[0].startswith(("CC-", "HHG-"))
+                 or str(row.get("source_id", "")).split("#", 1)[0] in case_ids]
     doc_ids = {row["doc_id"] for row in documents}
     cases, docs = {}, {}
     trace["embedding_indexes"] = []
@@ -83,6 +85,8 @@ async def retrieve_indexes(graph, query_text, as_of, library, documents, trace):
                 trace["embedding_indexes"].append(detail)
                 try:
                     provider = provider_for(spec.model_id)
+                    if provider.model_id != spec.model_id:
+                        raise ValueError("Query provider differs from the index model")
                     query = (await embed_vectors(provider, [query_text], query=True))[0]
                     for name, allowed, key, target in (
                         ("similar_cases", covered & case_ids, "case_id", cases),
