@@ -6,10 +6,11 @@ requires-python = ">=3.12"
 dependencies = [
   "pandas>=2.2", "numpy>=1.26", "pydantic>=2.10", "python-dotenv>=1.0",
   "google-genai>=1.0", "tigergraph-mcp>=1.0.3", "mcp>=1.0", "tenacity>=9.0",
-  "pyTigerGraph>=2.0", "streamlit>=1.40", "pyvis>=0.3.2",
+  "pyTigerGraph>=2.0", "streamlit>=1.40", "pyvis>=0.3.2", "fastembed>=0.7",
 ]
 
 [project.optional-dependencies]
+gemma = ["sentence-transformers>=5.1", "transformers>=4.56"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
 
 [build-system]
