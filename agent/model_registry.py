@@ -64,9 +64,12 @@ def discover(*, refresh=False, clients=None, path=None, now=None):
     for kind in ("gen", "embed"):
         scope = credential_scope(kind)
         entry = cache.get(kind, {})
-        if not isinstance(entry, dict) or entry.get("scope") != scope:
+        if (not isinstance(entry, dict) or entry.get("scope") != scope
+                or not isinstance(entry.get("checked_at", 0), (int, float))
+                or not isinstance(entry.get("models", []), list)
+                or not all(isinstance(name, str) for name in entry.get("models", []))):
             entry = {}
-        if not refresh and now - entry.get("checked_at", 0) < 86400:
+        if not refresh and "checked_at" in entry and now - entry["checked_at"] < 86400:
             result[kind] = entry
             continue
         if clients is None and not configured(kind):
