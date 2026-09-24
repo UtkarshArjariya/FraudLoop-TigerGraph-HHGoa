@@ -12,6 +12,8 @@ from agent.embeddings import index_lock, index_specs, register_index
 from agent.model_registry import discover
 from scripts.setup_graph import ROOT, REMOTE, GSQL, run
 
+BASE_QUERIES = ("card_window", "card_baseline", "device_ring", "region_cluster", "prior_cases", "case_library", "write_case", "get_documents", "write_document", "tg_wcc")
+
 VERTEX_TYPES = ("ClosedCase", "DocChunk", "FraudCase")
 
 
@@ -60,7 +62,31 @@ def schema_additions(inventory, specs):
     return additions
 
 
-def migrate(container, *, registry=None):
+def installed_queries(inventory):
+    return set(re.findall(r"(?m)^\s*- (\w+)\([^\n]*\) \(installed[^\n]*\)", inventory))
+
+
+def install_queries(docker, names, log, *, resume=False, restart_every=0):
+    inventory = run([*docker, GSQL, 'USE GRAPH FraudGraph\nLS'], log)
+    already = installed_queries(inventory) if resume else set()
+    pending = [name for name in names if name not in already]
+    for position, name in enumerate(pending, 1):
+        # Separate CLI invocations avoid treating a prematurely closed long
+        # GSQL batch session as a successful migration.
+        run([*docker, GSQL, 'USE GRAPH FraudGraph\nINSTALL QUERY ' + name], log)
+        inventory = run([*docker, GSQL, 'USE GRAPH FraudGraph\nLS'], log)
+        if name not in installed_queries(inventory):
+            raise RuntimeError('Query installation incomplete: ' + name)
+        if restart_every and position % restart_every == 0 and position < len(pending):
+            # Explicit operator option for the memory-constrained Docker VM.
+            gadmin = str(Path(GSQL).with_name('gadmin'))
+            run([*docker, gadmin, 'restart', 'gsql', '-y'], log)
+    final = installed_queries(run([*docker, GSQL, 'USE GRAPH FraudGraph\nLS'], log))
+    if not set(names) <= final:
+        raise RuntimeError('Query installation incomplete: ' + ', '.join(sorted(set(names) - final)))
+
+
+def migrate(container, *, registry=None, resume_queries=False, restart_every=0):
     log = ROOT / 'data/runs/embedding_migration.log'
     log.parent.mkdir(parents=True, exist_ok=True)
     docker = ['docker', 'exec', '-u', 'tigergraph', container]
@@ -68,6 +94,12 @@ def migrate(container, *, registry=None):
     if not re.search(r'\bFraudGraph\b', inventory):
         raise RuntimeError('FraudGraph does not exist')
     specs = index_specs(registry=registry)
+    names = list(BASE_QUERIES) + [name + "_" + spec.key for spec in specs for name in ("similar_cases", "search_documents")]
+    if resume_queries:
+        install_queries(docker, names, log, resume=True, restart_every=restart_every)
+        for spec in specs:
+            register_index(spec, provisioned=True, queries_verified=True)
+        return
     additions = schema_additions(inventory, specs)
     missing_legacy = [v for v in VERTEX_TYPES if any(f'ALTER VERTEX {v} ADD VECTOR ATTRIBUTE embedding(' in line for line in additions)]
     if missing_legacy:
@@ -80,23 +112,25 @@ def migrate(container, *, registry=None):
         run([*docker, GSQL, script], log)
     base = (ROOT / 'gsql/03_queries.gsql').read_text().split('// MODEL INDEX QUERIES')[0]
     query_file = ROOT / 'data/runs/multi_index_queries.gsql'
-    installs = ['card_window', 'card_baseline', 'device_ring', 'region_cluster', 'prior_cases', 'case_library', 'write_case', 'get_documents', 'write_document', 'tg_wcc'] + [name + '_' + spec.key for spec in specs for name in ('similar_cases', 'search_documents')]
-    query_file.write_text(base + vector_queries(specs) + '\n' + '\n'.join('INSTALL QUERY ' + name for name in installs) + '\n')
+    query_file.write_text(base + vector_queries(specs) + '\n')
     run([*docker, 'mkdir', '-p', REMOTE], log)
     run(['docker', 'cp', str(query_file), f'{container}:{REMOTE}/multi_index_queries.gsql'], log)
     run([*docker, GSQL, f'{REMOTE}/multi_index_queries.gsql'], log)
+    install_queries(docker, names, log, restart_every=restart_every)
     for spec in specs:
-        register_index(spec, provisioned=True)
+        register_index(spec, provisioned=True, queries_verified=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--container', default='tg')
     parser.add_argument('--refresh-models', action='store_true')
+    parser.add_argument('--resume-queries', action='store_true', help='Verify and install only pending query definitions after an interrupted migration')
+    parser.add_argument('--restart-gsql-every', type=int, default=0, help='Explicitly restart GSQL after N installs to bound memory in small Docker VMs')
     args = parser.parse_args()
     registry = discover(refresh=args.refresh_models)
     with index_lock(exclusive=True):
-        migrate(args.container, registry=registry)
+        migrate(args.container, registry=registry, resume_queries=args.resume_queries, restart_every=args.restart_gsql_every)
 
 
 if __name__ == '__main__':
