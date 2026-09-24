@@ -61,6 +61,14 @@ BASE_INDEXES = (
 )
 
 
+def validate_spec(spec):
+    if spec.dim != 768:
+        raise ModelMismatch("Only 768-dimensional indexes are supported")
+    for reserved in BASE_INDEXES:
+        if (spec.attribute == reserved.attribute and spec.model_id != reserved.model_id) or (spec.key == reserved.key and spec != reserved):
+            raise ModelMismatch("Reserved index attributes cannot be assigned to another model")
+
+
 def normalize(vectors, count):
     result = []
     for value in vectors:
@@ -198,10 +206,7 @@ def read_indexes(local=False):
     if len({s.attribute for s in specs}) != len(specs) or len({s.model_id for s in specs}) != len(specs):
         raise ModelMismatch("Every model must own a unique vector attribute")
     for spec in specs:
-        if spec.dim != 768:
-            raise ModelMismatch("Only 768-dimensional indexes are supported")
-        if spec.attribute == "embedding" and spec.model_id != "gemini-embedding-001":
-            raise ModelMismatch("Legacy embedding attribute belongs to Gemini 001")
+        validate_spec(spec)
     return value
 
 
@@ -241,6 +246,7 @@ def covered_ids(spec, local=False):
 
 
 def register_index(spec, local=False, **updates):
+    validate_spec(spec)
     manifest = read_indexes(local)
     for key, entry in manifest["indexes"].items():
         old = IndexSpec(**entry["spec"])
