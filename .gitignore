@@ -21,3 +21,12 @@ data/embedding_indexes*.json
 data/model_registry.json
 data/quota_state.json
 data/quota_state.lock
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+data/runtime_cases/
+data/approvals.json
+data/approvals.json.lock
+data/backend_state/
+data/runtime_timelines/
+.playwright/
