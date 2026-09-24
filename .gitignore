@@ -29,4 +29,9 @@ data/approvals.json
 data/approvals.json.lock
 data/backend_state/
 data/runtime_timelines/
+data/runtime_traces/
+data/runtime_failed_timelines/
+data/runtime_triggers.json
+data/api_llm_budget.json
+data/api_llm_budget.lock
 .playwright/
