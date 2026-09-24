@@ -247,9 +247,12 @@ class Narrator:
                             raise
                         record_usage(response, call)
                         parsed = _value(response, "parsed")
+                        text = _value(response, "text", "") or ""
+                        if isinstance(text, str):
+                            text = re.sub(r"^```(?:json)?\s*([\s\S]*?)\s*```$", r"\1", text.strip())
                         draft = (parsed if isinstance(parsed, NarrativeDraft) else
                                  NarrativeDraft.model_validate(parsed) if isinstance(parsed, dict) else
-                                 NarrativeDraft.model_validate_json(_value(response, "text", "") or ""))
+                                 NarrativeDraft.model_validate_json(text))
                         words = validate_draft(draft, brief, fallback, allowed_ids)
                         metrics.update(narrative_source="gemini", llm_model_used=model,
                                        llm_model=model, llm_fallback_reason="")
