@@ -71,7 +71,7 @@ Status reports durable checkpoint coverage, not a live graph inventory. After an
 
 ## Retrieval and evidence viewer
 
-Every populated local index and every Gemini index participates, including indexes above 90% coverage and partial indexes. Queries are restricted to each index's covered, temporally eligible IDs. Rankings are fused with graph matches (shared card/device/region and same pattern) and narrative analogues using Reciprocal Rank Fusion, `k=60`. A candidate supported by several indexes gains rank; an unembedded graph match remains eligible. Policy chunks use the same fusion with a text fallback. A failed index leaves the other rankings available.
+Every populated local index and every Gemini index participates, including indexes above 90% coverage and partial indexes. Queries are restricted to each index's covered, temporally eligible IDs. Rankings are fused with graph matches (shared card/device/region and same pattern) and narrative analogues using Reciprocal Rank Fusion, `k=60`. A candidate supported by several indexes gains rank; an unembedded graph match remains eligible. Selected precedent weights are normalized within one capped evidence family, so adding indexes does not multiply their decision weight. Policy chunks use the same fusion with a text fallback. A failed index leaves the other rankings available.
 
 Evidence claims include match sources and fused scores. Traces retain source ranks and graph paths; the read-only Streamlit viewer displays labels such as “matched by gemma + gem001 + shared device.” Saved answers from before this refactor do not acquire new provenance until regenerated.
 
@@ -94,3 +94,11 @@ git diff --check
 ```
 
 Tests mock service quotas, credential separation, discovery, cross-index writes, Embedding 2 batching, CPU prompts, checkpoint recovery, temporal filtering, and RRF ordering. Live service availability, gated model access, and deployment resources still require live checks.
+
+If a previous reset already removed the legacy vector attribute, migration marks its checkpoint as requiring recovery. Recreate the attribute with the additive migration, then restore available cached vectors without API requests:
+
+```bash
+.venv/bin/python -m scripts.embed_docs --provider gem001 --cached-only
+```
+
+The original checkpoint and cache are retained. The new per-model checkpoint then tracks the vectors actually restored; missing cached rows stay pending.
