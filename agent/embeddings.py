@@ -1,37 +1,284 @@
-"""Real Gemini embeddings only; missing service never produces fake vectors."""
+"""Model-owned 768-dimensional indexes; vectors never cross model attributes."""
 from __future__ import annotations
 
+import asyncio
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass
+import fcntl
+import hashlib
+import json
 import os
+from pathlib import Path
+from typing import Protocol
+
 import numpy as np
-from dotenv import load_dotenv
-from google import genai
 from google.genai import types
-from tenacity import retry, stop_after_attempt, wait_random_exponential
+
+from agent.model_clients import configured, get_client
+from agent.model_registry import atomic_json, discover
+from agent.quota import QuotaState, quota_ids
+from agent.service_errors import rate_limited, retry_delay, status_code
+
+INDEX_PATH = Path("data/embedding_indexes.json")
+LEGACY_INDEX_PATH = Path("data/embedding_index.json")
+CHECKPOINT_DIR = Path("data/checkpoints")
+LEGACY_CHECKPOINT = Path("data/embedded_ids.txt")
+CACHE_DIR = Path("data/embeddings")
+LOCAL_MODEL = "BAAI/bge-base-en-v1.5"
+GEMMA_MODEL = "google/embeddinggemma-300m"
 
 
-def configured() -> bool:
-    load_dotenv()
-    key = os.getenv("GEMINI_API_KEY", "")
-    return len(key) > 20 and not any(word in key.lower() for word in ("your_", "replace", "placeholder"))
+class ModelMismatch(RuntimeError):
+    pass
 
 
-@retry(stop=stop_after_attempt(2), wait=wait_random_exponential(min=2, max=20), reraise=True)
-def embed_batch(texts: list[str], *, query: bool = False) -> list[list[float]]:
-    if not configured():
-        raise RuntimeError("No Gemini API key configured")
-    options = types.HttpOptions(timeout=30_000, retry_options=types.HttpRetryOptions(attempts=1))
-    with genai.Client(api_key=os.environ["GEMINI_API_KEY"], http_options=options) as client:
-        response = client.models.embed_content(
-            model="gemini-embedding-001", contents=texts,
-            config=types.EmbedContentConfig(output_dimensionality=768,
-                task_type="RETRIEVAL_QUERY" if query else "RETRIEVAL_DOCUMENT"),
-        )
-    vectors = []
-    for embedding in response.embeddings or []:
-        vector = np.asarray(embedding.values, dtype=float)
-        if vector.shape != (768,) or not np.isfinite(vector).all() or np.linalg.norm(vector) == 0:
-            raise ValueError("Gemini returned an invalid 768-dimensional embedding")
-        vectors.append((vector / np.linalg.norm(vector)).tolist())
-    if len(vectors) != len(texts):
+class QuotaUnavailable(RuntimeError):
+    pass
+
+
+class Embedder(Protocol):
+    model_id: str
+    dim: int
+
+    def embed(self, texts: list[str], *, query: bool = False) -> list[list[float]]: ...
+
+
+@dataclass(frozen=True)
+class IndexSpec:
+    key: str
+    model_id: str
+    attribute: str
+    provider: str
+    dim: int = 768
+
+
+BASE_INDEXES = (
+    # Preserve every legacy Gemini 001 vector in place, without copying/dropping.
+    IndexSpec("gem001", "gemini-embedding-001", "embedding", "gemini"),
+    IndexSpec("gem2", "gemini-embedding-2", "emb_gem2", "gemini"),
+    IndexSpec("gemma", GEMMA_MODEL, "emb_gemma", "gemma"),
+    IndexSpec("bge", LOCAL_MODEL, "emb_bge", "bge"),
+)
+
+
+def normalize(vectors, count):
+    result = []
+    for value in vectors:
+        vector = np.asarray(value, dtype=float)
+        norm = np.linalg.norm(vector)
+        if vector.shape != (768,) or not np.isfinite(vector).all() or not np.isfinite(norm) or norm == 0:
+            raise ValueError("Expected a finite nonzero 768-dimensional embedding")
+        result.append((vector / norm).tolist())
+    if len(result) != count:
         raise ValueError("Embedding response length mismatch")
-    return vectors
+    return result
+
+
+class GeminiEmbedder:
+    dim = 768
+
+    def __init__(self, model_id="gemini-embedding-001", *, client=None, quota=None):
+        self.model_id = model_id
+        self.client = client
+        self.quota = quota or QuotaState("embed")
+
+    def embed(self, texts, *, query=False):
+        if not texts:
+            return []
+        if self.quota.remaining(self.model_id):
+            raise QuotaUnavailable("Embedding model is cooling down; other indexes remain available")
+        client = self.client or get_client("embed")
+        # Embedding 2 combines a list of contents into a multimodal input. Each
+        # document must be its own request. Other unknown models use this safe path.
+        batches = [texts] if self.model_id == "gemini-embedding-001" else [[text] for text in texts]
+        vectors = []
+        for batch in batches:
+            options = {"output_dimensionality": 768}
+            if self.model_id == "gemini-embedding-001":
+                options["task_type"] = "RETRIEVAL_QUERY" if query else "RETRIEVAL_DOCUMENT"
+            try:
+                response = client.models.embed_content(model=self.model_id, contents=batch,
+                                                        config=types.EmbedContentConfig(**options))
+            except Exception as exc:
+                if rate_limited(exc):
+                    self.quota.record(self.model_id, exc)
+                raise
+            vectors.extend(normalize((e.values for e in response.embeddings or []), len(batch)))
+        return vectors
+
+
+class LocalGemmaEmbedder:
+    model_id = GEMMA_MODEL
+    dim = 768
+    # Model card: retrieval query and title-less retrieval document prompts.
+    QUERY_PROMPT = "task: search result | query: "
+    DOCUMENT_PROMPT = "title: none | text: "
+
+    def __init__(self):
+        self._model = None
+
+    def embed(self, texts, *, query=False):
+        if not texts:
+            return []
+        if self._model is None:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer(self.model_id, device="cpu", trust_remote_code=False)
+        values = self._model.encode(texts, prompt=self.QUERY_PROMPT if query else self.DOCUMENT_PROMPT,
+                                    normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False)
+        return normalize(values, len(texts))
+
+
+class LocalBgeEmbedder:
+    model_id = LOCAL_MODEL
+    dim = 768
+
+    def __init__(self):
+        self._model = None
+
+    def embed(self, texts, *, query=False):
+        if not texts:
+            return []
+        if self._model is None:
+            from fastembed import TextEmbedding
+            self._model = TextEmbedding(model_name=self.model_id, providers=["CPUExecutionProvider"])
+        values = self._model.query_embed(texts) if query else self._model.embed(texts)
+        return normalize(values, len(texts))
+
+
+LocalEmbedder = LocalBgeEmbedder
+_PROVIDERS = {}
+
+
+def provider_for(model_id):
+    if model_id not in _PROVIDERS:
+        factory = LocalGemmaEmbedder if model_id == GEMMA_MODEL else LocalBgeEmbedder if model_id == LOCAL_MODEL else None
+        _PROVIDERS[model_id] = factory() if factory else GeminiEmbedder(model_id)
+    return _PROVIDERS[model_id]
+
+
+async def embed_vectors(provider, texts, *, query=False, wait_for_quota=False):
+    """Bounded retries. Queries move on immediately on quota, ingestion can wait."""
+    for attempt in range(3):
+        try:
+            return await asyncio.to_thread(provider.embed, texts, query=query)
+        except Exception as exc:
+            if rate_limited(exc):
+                daily = any("perday" in value.lower() for value in quota_ids(exc))
+                if daily or not wait_for_quota or attempt == 2:
+                    raise
+                delay = retry_delay(exc)
+                delay = 30 if delay is None else delay
+            elif status_code(exc) == 503 and attempt < 2:
+                delay = (2, 5)[attempt]
+            else:
+                raise
+            # A very long cooldown stops this index; other models can progress.
+            if delay > 300:
+                raise QuotaUnavailable("Long embedding cooldown; resume this index later") from exc
+            while delay > 0:
+                step = min(delay, 30)
+                await asyncio.sleep(step)
+                delay -= step
+    raise AssertionError("unreachable")
+
+
+def index_path(local=False):
+    return INDEX_PATH.with_name(INDEX_PATH.stem + ".local.json") if local else INDEX_PATH
+
+
+def read_indexes(local=False):
+    path = index_path(local)
+    try:
+        value = json.loads(path.read_text())
+    except FileNotFoundError:
+        return {"version": 2, "indexes": {}}
+    if value.get("version") != 2 or not isinstance(value.get("indexes"), dict):
+        raise ModelMismatch("Invalid multi-index manifest")
+    specs = [IndexSpec(**entry["spec"]) for entry in value["indexes"].values()]
+    if len({s.attribute for s in specs}) != len(specs) or len({s.model_id for s in specs}) != len(specs):
+        raise ModelMismatch("Every model must own a unique vector attribute")
+    for spec in specs:
+        if spec.dim != 768:
+            raise ModelMismatch("Only 768-dimensional indexes are supported")
+        if spec.attribute == "embedding" and spec.model_id != "gemini-embedding-001":
+            raise ModelMismatch("Legacy embedding attribute belongs to Gemini 001")
+    return value
+
+
+def index_specs(local=False, *, registry=None):
+    saved = read_indexes(local)["indexes"]
+    specs = {key: IndexSpec(**value["spec"]) for key, value in saved.items()}
+    for spec in BASE_INDEXES:
+        specs.setdefault(spec.key, spec)
+    names = [] if registry is None else registry.get("embed", {}).get("models", [])
+    # A preview is a different model: it NEVER reuses a stable model's attribute.
+    for name in sorted(names):
+        if any(spec.model_id == name for spec in specs.values()):
+            continue
+        suffix = hashlib.sha256(name.encode()).hexdigest()[:10]
+        key = "gem2_" + suffix if "embedding-2" in name else "api_" + suffix
+        specs[key] = IndexSpec(key, name, "emb_" + key, "gemini")
+    return list(specs.values())
+
+
+def checkpoint_path(spec, local=False):
+    root = CHECKPOINT_DIR / "local" if local else CHECKPOINT_DIR
+    return root / (spec.model_id.replace("/", "--") + ".txt")
+
+
+def completed_ids(path):
+    return set(path.read_text().splitlines()) - {""} if path.exists() else set()
+
+
+def covered_ids(spec, local=False):
+    ids = completed_ids(checkpoint_path(spec, local))
+    if spec.key == "gem001" and not local:
+        # User confirmed this pre-migration checkpoint contains Gemini 001 only.
+        # It remains untouched and is not treated as a live graph inventory.
+        ids |= completed_ids(LEGACY_CHECKPOINT)
+    return ids
+
+
+def register_index(spec, local=False, **updates):
+    manifest = read_indexes(local)
+    for key, entry in manifest["indexes"].items():
+        old = IndexSpec(**entry["spec"])
+        if (old.attribute == spec.attribute or old.model_id == spec.model_id or key == spec.key) and old != spec:
+            raise ModelMismatch("Index ownership cannot be changed; use a separate attribute")
+    entry = manifest["indexes"].setdefault(spec.key, {"spec": asdict(spec), "state": "building"})
+    entry.update(updates)
+    atomic_json(index_path(local), manifest)
+    return entry
+
+
+def require_index(model_id, attribute, local=False):
+    spec = next((s for s in index_specs(local) if s.model_id == model_id and s.attribute == attribute), None)
+    if spec is None:
+        raise ModelMismatch("Vector model does not own the requested index attribute")
+    return spec
+
+
+@contextmanager
+def index_lock(local=False, *, exclusive=False):
+    # Retain the original lock path so an older ingestion process cannot race us.
+    path = LEGACY_INDEX_PATH.with_name("embedding_index.local.lock" if local else "embedding_index.lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        try:
+            fcntl.flock(handle, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ModelMismatch("Embedding index is busy; retry after ingestion finishes") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def selected_specs(mode, local=False, *, registry=None):
+    specs = index_specs(local, registry=registry)
+    available = set((registry or {}).get("embed", {}).get("models", []))
+    if mode == "all":
+        return [s for s in specs if s.provider != "gemini" or s.model_id in available]
+    if mode == "gem2":
+        return [s for s in specs if s.key.startswith("gem2") and s.model_id in available]
+    return [s for s in specs if s.key == mode]
