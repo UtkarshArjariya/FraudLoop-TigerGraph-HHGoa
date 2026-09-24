@@ -1,0 +1,150 @@
+{
+  "case_id": "HHG-008",
+  "case": {
+    "status": "closed_fraud",
+    "verdict": "fraud",
+    "fraud_probability": 0.934,
+    "pattern": "card_not_present_fraud",
+    "pattern_description": "",
+    "affected_txn_ids": [
+      "3557979",
+      "3557987",
+      "3558054"
+    ],
+    "first_suspicious_txn_id": "3557979",
+    "connected_card_ids": [],
+    "connected_device_profiles": [],
+    "exposure_usd": 166.97,
+    "evidence": [
+      {
+        "claim": "Before the episode, 886 transactions on C13171-K2 have median $39.35 and 95th percentile $161.57. The flagged $55.68 product C is familiar; product codes are not merchant identifiers.",
+        "source": "graph",
+        "ref": "query:card_baseline",
+        "entity_ids": [
+          "3558054",
+          "3550022",
+          "3550100",
+          "3551233",
+          "3551412"
+        ]
+      },
+      {
+        "claim": "Identity status is Found; profile is incomplete or missing. Proxy indicator: not recorded. 86 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+        "source": "graph",
+        "ref": "query:device_ring",
+        "entity_ids": [
+          "3558054",
+          "||chrome 66.0|"
+        ]
+      },
+      {
+        "claim": "Top-five retrieved precedents: CC-4819 (cleared; same dataset card; graph card/device/region relationship); CC-0003 (cleared; same activity typology in analyst narrative); CC-0009 (cleared; same activity typology in analyst narrative); CC-0010 (cleared; same activity typology in analyst narrative); CC-0015 (cleared; same activity typology in analyst narrative). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+        "source": "document",
+        "ref": "retrieval:hybrid_precedents",
+        "entity_ids": [
+          "CC-4819",
+          "CC-0003",
+          "CC-0009",
+          "CC-0010",
+          "CC-0015"
+        ]
+      },
+      {
+        "claim": "Customer C13171 message: 'I never made this $55.68 purchase. Please check my card.' Refers to 3558054.",
+        "source": "customer",
+        "ref": "case_pack.csv:trigger_text",
+        "entity_ids": [
+          "C13171",
+          "3558054"
+        ]
+      },
+      {
+        "claim": "Bank risk score 0.38 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+        "source": "graph",
+        "ref": "query:card_window; Fraud Policy 0",
+        "entity_ids": [
+          "3558054"
+        ]
+      },
+      {
+        "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+        "source": "document",
+        "ref": "HHGOA_IEEE/README.md#fraud-policy",
+        "entity_ids": []
+      },
+      {
+        "claim": "Retrieved 16 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+        "source": "graph",
+        "ref": "query:case_library",
+        "entity_ids": [
+          "HHG-005",
+          "HHG-001",
+          "HHG-013",
+          "HHG-002",
+          "HHG-017",
+          "HHG-019",
+          "HHG-007",
+          "HHG-016",
+          "HHG-014",
+          "HHG-020",
+          "HHG-003",
+          "HHG-015",
+          "HHG-012",
+          "HHG-006",
+          "HHG-010",
+          "HHG-018"
+        ]
+      }
+    ],
+    "similar_prior_cases": [
+      "CC-4819",
+      "CC-0003",
+      "CC-0009",
+      "CC-0010",
+      "CC-0015"
+    ],
+    "summary": "C13171-K2 was assessed as fraud with fraud probability 0.934, with card not present fraud. The identified suspicious exposure is $166.97; 5 closed precedents were retrieved. The case-pack customer denial is observed input. Recommendations follow the cited policy and any L1/L2 action awaits human approval.",
+    "written_to_graph": true,
+    "graph_case_id": "HHG-008"
+  },
+  "evidence_requests": [],
+  "next_best_actions": {
+    "initial": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+      },
+      {
+        "action": "BLOCK_CARD",
+        "route": "L1",
+        "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+      }
+    ],
+    "final": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+      },
+      {
+        "action": "BLOCK_CARD",
+        "route": "L1",
+        "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+      }
+    ],
+    "what_changed": "nothing"
+  },
+  "sar": {
+    "file": false,
+    "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
+  },
+  "stop_reason": "R2 and section 6: the customer denial already recorded in the case pack settles the authorization question for this recommendation. No additional customer contact was performed.",
+  "tool_calls": 7,
+  "tokens": 0,
+  "latency_s": 1.1079
+}

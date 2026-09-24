@@ -1,0 +1,80 @@
+// FRAUDLOOP: global entity types; setup never drops an existing graph.
+USE GLOBAL
+CREATE VERTEX Customer (PRIMARY_ID customer_id STRING) WITH primary_id_as_attribute="true"
+CREATE VERTEX Card (PRIMARY_ID card_key STRING, card_id STRING, customer_id STRING) WITH primary_id_as_attribute="true"
+CREATE VERTEX Txn (PRIMARY_ID txn_id STRING,
+  txn_seconds DOUBLE,
+  amount DOUBLE,
+  product STRING,
+  card1 STRING,
+  card2 STRING,
+  card3 STRING,
+  card4 STRING,
+  card5 STRING,
+  card6 STRING,
+  region STRING,
+  country STRING,
+  dist1 STRING,
+  p_email STRING,
+  r_email STRING,
+  C1 STRING,
+  C2 STRING,
+  C4 STRING,
+  C13 STRING,
+  C14 STRING,
+  D1 STRING,
+  M4 STRING,
+  M6 STRING,
+  customer_id STRING,
+  ts STRING,
+  channel STRING,
+  risk_score DOUBLE,
+  id_15 STRING,
+  id_23 STRING,
+  id_28 STRING,
+  id_29 STRING,
+  id_30 STRING,
+  id_31 STRING,
+  id_33 STRING,
+  id_34 STRING,
+  DeviceType STRING,
+  DeviceInfo STRING,
+  device_profile STRING,
+  card_id STRING,
+  card_key STRING,
+  uid STRING,
+  epoch INT) WITH primary_id_as_attribute="true"
+CREATE VERTEX DeviceProfile (PRIMARY_ID device_profile STRING) WITH primary_id_as_attribute="true"
+CREATE VERTEX EmailDomain (PRIMARY_ID email_domain STRING) WITH primary_id_as_attribute="true"
+CREATE VERTEX BillingRegion (PRIMARY_ID region STRING) WITH primary_id_as_attribute="true"
+CREATE VERTEX ClosedCase (PRIMARY_ID case_id STRING, customer_id STRING, card_id STRING,
+  opened_at DATETIME, closed_at DATETIME, outcome STRING, pattern STRING,
+  first_fraud_txn_id STRING, txn_ids STRING, n_txns INT, exposure_usd DOUBLE,
+  connected_card_ids STRING, actions_taken STRING, report_filed STRING, analyst_notes STRING)
+  WITH primary_id_as_attribute="true"
+CREATE VERTEX DocChunk (PRIMARY_ID doc_id STRING, source_id STRING, text_data STRING)
+  WITH primary_id_as_attribute="true"
+CREATE VERTEX FraudCase (PRIMARY_ID case_id STRING, customer_id STRING, card_id STRING,
+  opened_epoch INT, verdict STRING, summary STRING, answer_json STRING)
+  WITH primary_id_as_attribute="true"
+CREATE DIRECTED EDGE Owns (FROM Customer, TO Card) WITH REVERSE_EDGE="OwnedBy"
+CREATE DIRECTED EDGE CardTxn (FROM Card, TO Txn) WITH REVERSE_EDGE="TxnCard"
+CREATE DIRECTED EDGE CardDevice (FROM Card, TO DeviceProfile) WITH REVERSE_EDGE="DeviceCard"
+CREATE DIRECTED EDGE DeviceTxn (FROM DeviceProfile, TO Txn) WITH REVERSE_EDGE="TxnDevice"
+CREATE DIRECTED EDGE RegionTxn (FROM BillingRegion, TO Txn) WITH REVERSE_EDGE="TxnRegion"
+CREATE DIRECTED EDGE PurchaserEmail (FROM Txn, TO EmailDomain) WITH REVERSE_EDGE="PurchaserEmailTxn"
+CREATE DIRECTED EDGE RecipientEmail (FROM Txn, TO EmailDomain) WITH REVERSE_EDGE="RecipientEmailTxn"
+CREATE DIRECTED EDGE NextTxn (FROM Txn, TO Txn) WITH REVERSE_EDGE="PreviousTxn"
+CREATE DIRECTED EDGE CaseCard (FROM ClosedCase, TO Card) WITH REVERSE_EDGE="CardCase"
+CREATE DIRECTED EDGE Involves (FROM ClosedCase, TO Txn) WITH REVERSE_EDGE="InvolvedIn"
+CREATE DIRECTED EDGE ConnectedCard (FROM ClosedCase, TO Card) WITH REVERSE_EDGE="ConnectedCase"
+CREATE DIRECTED EDGE InvestigatesCard (FROM FraudCase, TO Card) WITH REVERSE_EDGE="CardInvestigation"
+CREATE DIRECTED EDGE DocumentsCase (FROM DocChunk, TO ClosedCase) WITH REVERSE_EDGE="CaseDocuments"
+CREATE GRAPH FraudGraph (*)
+USE GLOBAL
+CREATE GLOBAL SCHEMA_CHANGE JOB fraudloop_vectors {
+  ALTER VERTEX ClosedCase ADD VECTOR ATTRIBUTE embedding(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX DocChunk ADD VECTOR ATTRIBUTE embedding(DIMENSION=768, METRIC="COSINE");
+  ALTER VERTEX FraudCase ADD VECTOR ATTRIBUTE embedding(DIMENSION=768, METRIC="COSINE");
+}
+RUN GLOBAL SCHEMA_CHANGE JOB fraudloop_vectors

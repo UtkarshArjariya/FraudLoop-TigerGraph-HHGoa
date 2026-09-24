@@ -1,0 +1,33 @@
+// Server files are copied by scripts/setup_graph.py before this job runs.
+USE GRAPH FraudGraph
+CREATE LOADING JOB fraudloop_load FOR GRAPH FraudGraph {
+  DEFINE FILENAME f_customers = "/home/tigergraph/mydata/customers.csv";
+  DEFINE FILENAME f_cards = "/home/tigergraph/mydata/cards.csv";
+  DEFINE FILENAME f_devices = "/home/tigergraph/mydata/devices.csv";
+  DEFINE FILENAME f_emails = "/home/tigergraph/mydata/emails.csv";
+  DEFINE FILENAME f_regions = "/home/tigergraph/mydata/regions.csv";
+  DEFINE FILENAME f_transactions = "/home/tigergraph/mydata/transactions.csv";
+  DEFINE FILENAME f_closed_cases = "/home/tigergraph/mydata/closed_cases.csv";
+  DEFINE FILENAME f_involves = "/home/tigergraph/mydata/involves.csv";
+  DEFINE FILENAME f_connected = "/home/tigergraph/mydata/connected.csv";
+  DEFINE FILENAME f_next = "/home/tigergraph/mydata/next.csv";
+  LOAD f_customers TO VERTEX Customer VALUES ($"customer_id") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_cards TO VERTEX Card VALUES ($"card_key", $"card_id", $"customer_id") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_devices TO VERTEX DeviceProfile VALUES ($"device_profile") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_emails TO VERTEX EmailDomain VALUES ($"email_domain") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_regions TO VERTEX BillingRegion VALUES ($"region") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_transactions TO VERTEX Txn VALUES ($"txn_id", $"txn_seconds", $"amount", $"product", $"card1", $"card2", $"card3", $"card4", $"card5", $"card6", $"region", $"country", $"dist1", $"p_email", $"r_email", $"C1", $"C2", $"C4", $"C13", $"C14", $"D1", $"M4", $"M6", $"customer_id", $"ts", $"channel", $"risk_score", $"id_15", $"id_23", $"id_28", $"id_29", $"id_30", $"id_31", $"id_33", $"id_34", $"DeviceType", $"DeviceInfo", $"device_profile", $"card_id", $"card_key", $"uid", $"epoch") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_closed_cases TO VERTEX ClosedCase VALUES ($"case_id", $"customer_id", $"card_id", $"opened_at", $"closed_at", $"outcome", $"pattern", $"first_fraud_txn_id", $"txn_ids", $"n_txns", $"exposure_usd", $"connected_card_ids", $"actions_taken", $"report_filed", $"analyst_notes") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_cards TO EDGE Owns VALUES ($"customer_id", $"card_key") WHERE $"customer_id" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_transactions TO EDGE CardTxn VALUES ($"card_key", $"txn_id") WHERE $"card_key" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_transactions TO EDGE CardDevice VALUES ($"card_key", $"device_profile") WHERE $"device_profile" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_transactions TO EDGE DeviceTxn VALUES ($"device_profile", $"txn_id") WHERE $"device_profile" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_transactions TO EDGE RegionTxn VALUES ($"region", $"txn_id") WHERE $"region" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_transactions TO EDGE PurchaserEmail VALUES ($"txn_id", $"p_email") WHERE $"p_email" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_transactions TO EDGE RecipientEmail VALUES ($"txn_id", $"r_email") WHERE $"r_email" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_closed_cases TO EDGE CaseCard VALUES ($"case_id", $"card_id") WHERE $"card_id" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_involves TO EDGE Involves VALUES ($"case_id", $"txn_id") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_connected TO EDGE ConnectedCard VALUES ($"case_id", $"card_id") WHERE $"card_id" != "" USING SEPARATOR=",", HEADER="true", QUOTE="double";
+  LOAD f_next TO EDGE NextTxn VALUES ($"txn_id", $"next_txn_id") USING SEPARATOR=",", HEADER="true", QUOTE="double";
+}
+RUN LOADING JOB fraudloop_load

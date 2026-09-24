@@ -1,0 +1,141 @@
+{
+  "case_id": "HHG-002",
+  "case": {
+    "status": "closed_legitimate",
+    "verdict": "legitimate",
+    "fraud_probability": 0.04,
+    "pattern": "none",
+    "pattern_description": "",
+    "affected_txn_ids": [],
+    "first_suspicious_txn_id": "",
+    "connected_card_ids": [],
+    "connected_device_profiles": [],
+    "exposure_usd": 0.0,
+    "evidence": [
+      {
+        "claim": "Before the episode, 35 transactions on C11891-K1 have median $47.29 and 95th percentile $91.41. The flagged $292.36 product C is familiar; product codes are not merchant identifiers.",
+        "source": "graph",
+        "ref": "query:card_baseline",
+        "entity_ids": [
+          "3478782",
+          "3400451",
+          "3400494",
+          "3400552",
+          "3433977"
+        ]
+      },
+      {
+        "claim": "Identity status is unavailable; profile is incomplete or missing. Proxy indicator: not recorded. 0 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+        "source": "graph",
+        "ref": "query:device_ring",
+        "entity_ids": [
+          "3478782"
+        ]
+      },
+      {
+        "claim": "Top-five retrieved precedents: CC-4160 (confirmed_fraud; same dataset card; graph card/device/region relationship); CC-0001 (confirmed_fraud; same activity typology in analyst narrative); CC-0003 (cleared; same activity typology in analyst narrative); CC-0007 (confirmed_fraud; same activity typology in analyst narrative); CC-0009 (cleared; same activity typology in analyst narrative). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+        "source": "document",
+        "ref": "retrieval:hybrid_precedents",
+        "entity_ids": [
+          "CC-4160",
+          "CC-0001",
+          "CC-0003",
+          "CC-0007",
+          "CC-0009"
+        ]
+      },
+      {
+        "claim": "Bank risk score 0.79 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+        "source": "graph",
+        "ref": "query:card_window; Fraud Policy 0",
+        "entity_ids": [
+          "3478782"
+        ]
+      },
+      {
+        "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+        "source": "document",
+        "ref": "HHGOA_IEEE/README.md#fraud-policy",
+        "entity_ids": []
+      },
+      {
+        "claim": "Retrieved 4 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+        "source": "graph",
+        "ref": "query:case_library",
+        "entity_ids": [
+          "HHG-017",
+          "HHG-006",
+          "HHG-014",
+          "HHG-015"
+        ]
+      },
+      {
+        "claim": "SIMULATED, not an observed reply. Precedents CC-4160, CC-0001, CC-0003, CC-0007, CC-0009 and independent evidence give posterior 0.433. Customer validation directly tests whether the cardholder authorized the flagged activity. Assume successful customer confirmation that the flagged activity was authorized.",
+        "source": "customer",
+        "ref": "evidence_request:1",
+        "entity_ids": []
+      }
+    ],
+    "similar_prior_cases": [
+      "CC-4160",
+      "CC-0001",
+      "CC-0003",
+      "CC-0007",
+      "CC-0009"
+    ],
+    "summary": "C11891-K1 was assessed as legitimate with fraud probability 0.040, with no established fraud typology. The identified suspicious exposure is $0.00; 5 closed precedents were retrieved. A simulated verification response is documented below. Recommendations follow the cited policy and any L1/L2 action awaits human approval.",
+    "written_to_graph": true,
+    "graph_case_id": "HHG-002"
+  },
+  "evidence_requests": [
+    {
+      "type": "customer_validation",
+      "asked_after_step": 4,
+      "assumed_response": "SIMULATED, not an observed reply. Precedents CC-4160, CC-0001, CC-0003, CC-0007, CC-0009 and independent evidence give posterior 0.433. Customer validation directly tests whether the cardholder authorized the flagged activity. Assume successful customer confirmation that the flagged activity was authorized."
+    }
+  ],
+  "next_best_actions": {
+    "initial": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. Section 3a: an evidence request or regulatory report must have an internal case behind it."
+      },
+      {
+        "action": "VERIFY_WITH_CUSTOMER",
+        "route": "auto",
+        "reason": "Section 5 and section 3b: obtain the requested evidence before updating the recommendation. R1: probability below 0.70 on at most one independent signal requires verification before any block."
+      },
+      {
+        "action": "MONITOR_CARD",
+        "route": "auto",
+        "reason": "Sections 1 and 3b: keep the card active under 72-hour monitoring while the uncertain investigation is resolved."
+      }
+    ],
+    "final": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+      },
+      {
+        "action": "CLOSE_NO_FRAUD",
+        "route": "auto",
+        "reason": "R3: the customer confirmed the transaction; record the confirmation and close as legitimate."
+      }
+    ],
+    "what_changed": "The explicitly simulated customer_validation response changed probability from 0.433 to 0.040 and the verdict from uncertain to legitimate; final recommendations reflect that response."
+  },
+  "sar": {
+    "file": false,
+    "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
+  },
+  "stop_reason": "Section 6: a verification response settled the question.",
+  "tool_calls": 6,
+  "tokens": 0,
+  "latency_s": 0.9648
+}

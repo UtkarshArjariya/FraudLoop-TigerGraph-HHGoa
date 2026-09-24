@@ -1,0 +1,143 @@
+{
+  "case_id": "HHG-005",
+  "case": {
+    "status": "closed_legitimate",
+    "verdict": "legitimate",
+    "fraud_probability": 0.0339,
+    "pattern": "none",
+    "pattern_description": "",
+    "affected_txn_ids": [],
+    "first_suspicious_txn_id": "",
+    "connected_card_ids": [],
+    "connected_device_profiles": [],
+    "exposure_usd": 0.0,
+    "evidence": [
+      {
+        "claim": "Before the episode, 90 transactions on C02923-K1 have median $117.01 and 95th percentile $761.23. The flagged $100.07 product R is familiar; product codes are not merchant identifiers.",
+        "source": "graph",
+        "ref": "query:card_baseline",
+        "entity_ids": [
+          "3523199",
+          "3505579",
+          "3505582",
+          "3509441",
+          "3509459"
+        ]
+      },
+      {
+        "claim": "Identity status is New; profile is complete. Proxy indicator: not recorded. 1 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+        "source": "graph",
+        "ref": "query:device_ring",
+        "entity_ids": [
+          "3523199",
+          "iOS Device|iOS 9.3.5|mobile safari 9.0|1024x768"
+        ]
+      },
+      {
+        "claim": "Billing-region code 330.0 is present in prior card history. The code is not a precise physical location.",
+        "source": "graph",
+        "ref": "query:card_baseline; query:region_cluster",
+        "entity_ids": [
+          "3523199",
+          "3505582",
+          "3509441",
+          "3509459"
+        ]
+      },
+      {
+        "claim": "Top-five retrieved precedents: CC-0189 (cleared; graph card/device/region relationship); CC-0219 (cleared; graph card/device/region relationship); CC-0445 (cleared; graph card/device/region relationship); CC-0470 (cleared; graph card/device/region relationship); CC-0483 (cleared; graph card/device/region relationship). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+        "source": "document",
+        "ref": "retrieval:hybrid_precedents",
+        "entity_ids": [
+          "CC-0189",
+          "CC-0219",
+          "CC-0445",
+          "CC-0470",
+          "CC-0483"
+        ]
+      },
+      {
+        "claim": "Bank risk score 0.54 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+        "source": "graph",
+        "ref": "query:card_window; Fraud Policy 0",
+        "entity_ids": [
+          "3523199"
+        ]
+      },
+      {
+        "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+        "source": "document",
+        "ref": "HHGOA_IEEE/README.md#fraud-policy",
+        "entity_ids": []
+      },
+      {
+        "claim": "Retrieved 11 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+        "source": "graph",
+        "ref": "query:case_library",
+        "entity_ids": [
+          "HHG-001",
+          "HHG-017",
+          "HHG-002",
+          "HHG-006",
+          "HHG-020",
+          "HHG-007",
+          "HHG-014",
+          "HHG-015",
+          "HHG-019",
+          "HHG-018",
+          "HHG-010"
+        ]
+      }
+    ],
+    "similar_prior_cases": [
+      "CC-0189",
+      "CC-0219",
+      "CC-0445",
+      "CC-0470",
+      "CC-0483"
+    ],
+    "summary": "C02923-K1 was assessed as legitimate with fraud probability 0.034, with no established fraud typology. The identified suspicious exposure is $0.00; 5 closed precedents were retrieved. No customer response was assumed. Recommendations follow the cited policy and any L1/L2 action awaits human approval.",
+    "written_to_graph": true,
+    "graph_case_id": "HHG-005"
+  },
+  "evidence_requests": [],
+  "next_best_actions": {
+    "initial": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+      },
+      {
+        "action": "CLOSE_NO_FRAUD",
+        "route": "auto",
+        "reason": "Sections 1 and 6: the assessed activity is legitimate; close the alert with its supporting evidence."
+      }
+    ],
+    "final": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+      },
+      {
+        "action": "CLOSE_NO_FRAUD",
+        "route": "auto",
+        "reason": "Sections 1 and 6: the assessed activity is legitimate; close the alert with its supporting evidence."
+      }
+    ],
+    "what_changed": "nothing"
+  },
+  "sar": {
+    "file": false,
+    "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
+  },
+  "stop_reason": "Section 6: fraud probability is at most 0.15 with at least two independent evidence families.",
+  "tool_calls": 8,
+  "tokens": 0,
+  "latency_s": 1.1086
+}

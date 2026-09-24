@@ -1,0 +1,159 @@
+{
+  "case_id": "HHG-020",
+  "case": {
+    "status": "open",
+    "verdict": "uncertain",
+    "fraud_probability": 0.5374,
+    "pattern": "card_not_present_new_device",
+    "pattern_description": "",
+    "affected_txn_ids": [
+      "3509359"
+    ],
+    "first_suspicious_txn_id": "3509359",
+    "connected_card_ids": [],
+    "connected_device_profiles": [],
+    "exposure_usd": 125.08,
+    "evidence": [
+      {
+        "claim": "Before the episode, 82 transactions on C12265-K2 have median $107.91 and 95th percentile $606.13. The flagged $125.08 product R is not previously observed; product codes are not merchant identifiers.",
+        "source": "graph",
+        "ref": "query:card_baseline",
+        "entity_ids": [
+          "3509359",
+          "3497527",
+          "3497540",
+          "3501882",
+          "3501890"
+        ]
+      },
+      {
+        "claim": "Identity status is New; profile is complete. Proxy indicator: not recorded. 17 card groups share the profile in the queried window. New-device status and common profile sharing alone are weak evidence.",
+        "source": "graph",
+        "ref": "query:device_ring",
+        "entity_ids": [
+          "3509359",
+          "Trident/7.0|Windows 10|ie 11.0 for desktop|1920x1080"
+        ]
+      },
+      {
+        "claim": "Billing-region code 264.0 is present in prior card history. The code is not a precise physical location.",
+        "source": "graph",
+        "ref": "query:card_baseline; query:region_cluster",
+        "entity_ids": [
+          "3509359",
+          "3497540",
+          "3501882",
+          "3501890"
+        ]
+      },
+      {
+        "claim": "Top-five retrieved precedents: CC-0007 (confirmed_fraud; matching device description in analyst notes); CC-0031 (confirmed_fraud; matching device description in analyst notes); CC-0075 (confirmed_fraud; matching device description in analyst notes); CC-0164 (confirmed_fraud; matching device description in analyst notes); CC-0241 (confirmed_fraud; matching device description in analyst notes). Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
+        "source": "document",
+        "ref": "retrieval:hybrid_precedents",
+        "entity_ids": [
+          "CC-0007",
+          "CC-0031",
+          "CC-0075",
+          "CC-0164",
+          "CC-0241"
+        ]
+      },
+      {
+        "claim": "Bank risk score 0.52 triggered review where applicable; it contributes zero to the fraud log-odds, including above 0.7.",
+        "source": "graph",
+        "ref": "query:card_window; Fraud Policy 0",
+        "entity_ids": [
+          "3509359"
+        ]
+      },
+      {
+        "claim": "Apply independent evidence, verify weak signals under R1, distinguish an internal case from a SAR under section 3a, and stop according to section 6.",
+        "source": "document",
+        "ref": "HHGOA_IEEE/README.md#fraud-policy",
+        "entity_ids": []
+      },
+      {
+        "claim": "Retrieved 8 earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+        "source": "graph",
+        "ref": "query:case_library",
+        "entity_ids": [
+          "HHG-017",
+          "HHG-002",
+          "HHG-006",
+          "HHG-014",
+          "HHG-010",
+          "HHG-018",
+          "HHG-015",
+          "HHG-019"
+        ]
+      },
+      {
+        "claim": "SIMULATED, not an observed reply. Precedents CC-0007, CC-0031, CC-0075, CC-0164, CC-0241 and independent evidence give posterior 0.537. Step-up authentication targets authorization on the newly observed device profile. Assume no response within 24 hours; authorization remains unresolved.",
+        "source": "external",
+        "ref": "evidence_request:1",
+        "entity_ids": []
+      }
+    ],
+    "similar_prior_cases": [
+      "CC-0007",
+      "CC-0031",
+      "CC-0075",
+      "CC-0164",
+      "CC-0241"
+    ],
+    "summary": "C12265-K2 was assessed as uncertain with fraud probability 0.537, with card not present new device. The identified suspicious exposure is $125.08; 5 closed precedents were retrieved. A simulated verification response is documented below. Recommendations follow the cited policy and any L1/L2 action awaits human approval.",
+    "written_to_graph": true,
+    "graph_case_id": "HHG-020"
+  },
+  "evidence_requests": [
+    {
+      "type": "step_up_auth",
+      "asked_after_step": 4,
+      "assumed_response": "SIMULATED, not an observed reply. Precedents CC-0007, CC-0031, CC-0075, CC-0164, CC-0241 and independent evidence give posterior 0.537. Step-up authentication targets authorization on the newly observed device profile. Assume no response within 24 hours; authorization remains unresolved."
+    }
+  ],
+  "next_best_actions": {
+    "initial": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. Section 3a: an evidence request or regulatory report must have an internal case behind it."
+      },
+      {
+        "action": "STEP_UP_AUTH",
+        "route": "auto",
+        "reason": "Section 5 and section 3b: obtain the requested evidence before updating the recommendation."
+      },
+      {
+        "action": "MONITOR_CARD",
+        "route": "auto",
+        "reason": "Sections 1 and 3b: keep the card active under 72-hour monitoring while the uncertain investigation is resolved."
+      }
+    ],
+    "final": [
+      {
+        "action": "CREATE_CASE",
+        "route": "auto",
+        "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open."
+      },
+      {
+        "action": "MONITOR_CARD",
+        "route": "auto",
+        "reason": "R4: no reply within 24 hours; monitor the active card for 72 hours. Sections 1 and 3b: keep the card active under 72-hour monitoring while the uncertain investigation is resolved."
+      }
+    ],
+    "what_changed": "The explicitly simulated response provided no decisive authorization evidence. The final recommendation retains the unresolved verdict and the policy-required monitoring or escalation."
+  },
+  "sar": {
+    "file": false,
+    "reason": "Section 3a: this evidence does not meet the confirmed/strongly suspected fraud and report-trigger requirements; retain the internal investigation.",
+    "narrative": "",
+    "subjects": [],
+    "total_amount_usd": 0.0,
+    "activity_dates": []
+  },
+  "stop_reason": "Section 6: the remaining uncertainty is authorization that anonymized records cannot settle. The simulated response added no decisive evidence; further automated steps are unlikely to change the recommendation. The card remains under monitoring and the case remains open.",
+  "tool_calls": 8,
+  "tokens": 0,
+  "latency_s": 1.1969
+}

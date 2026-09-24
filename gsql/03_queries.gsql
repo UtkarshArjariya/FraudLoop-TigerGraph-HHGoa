@@ -1,0 +1,119 @@
+// Installed, bounded evidence queries. All timestamps are UTC epoch seconds.
+USE GRAPH FraudGraph
+
+CREATE OR REPLACE QUERY card_window(STRING card_id, INT as_of, INT hours) FOR GRAPH FraudGraph {
+  rows = SELECT t FROM Card:c -(CardTxn:e)-> Txn:t
+    WHERE c.card_id == card_id AND t.epoch <= as_of
+      AND t.epoch >= as_of - hours * 3600;
+  PRINT rows;
+}
+
+CREATE OR REPLACE QUERY card_baseline(STRING card_id, INT as_of, INT days) FOR GRAPH FraudGraph {
+  rows = SELECT t FROM Card:c -(CardTxn:e)-> Txn:t
+    WHERE c.card_id == card_id AND t.epoch < as_of
+      AND t.epoch >= as_of - days * 86400;
+  PRINT rows;
+}
+
+CREATE OR REPLACE QUERY device_ring(STRING device_id, INT as_of, INT days) FOR GRAPH FraudGraph {
+  rows = SELECT t FROM DeviceProfile:d -(DeviceTxn:e)-> Txn:t
+    WHERE d.device_profile == device_id AND t.epoch <= as_of
+      AND t.epoch >= as_of - days * 86400;
+  cases = SELECT c FROM rows:t -(InvolvedIn:e)-> ClosedCase:c
+    WHERE c.outcome == "confirmed_fraud" AND datetime_to_epoch(c.closed_at) <= as_of;
+  PRINT rows, cases;
+}
+
+CREATE OR REPLACE QUERY region_cluster(STRING region_id, INT as_of, INT days) FOR GRAPH FraudGraph {
+  rows = SELECT t FROM BillingRegion:r -(RegionTxn:e)-> Txn:t
+    WHERE r.region == region_id AND t.epoch <= as_of
+      AND t.epoch >= as_of - days * 86400;
+  PRINT rows;
+}
+
+CREATE OR REPLACE QUERY prior_cases(STRING card_id, STRING device_id, STRING region_id, INT as_of)
+FOR GRAPH FraudGraph {
+  direct_cases = SELECT c FROM ClosedCase:c
+    WHERE c.card_id == card_id AND datetime_to_epoch(c.closed_at) <= as_of;
+  device_rows = SELECT t FROM DeviceProfile:d -(DeviceTxn:e)-> Txn:t
+    WHERE d.device_profile == device_id AND t.epoch <= as_of;
+  device_cases = SELECT c FROM device_rows:t -(InvolvedIn:e)-> ClosedCase:c
+    WHERE datetime_to_epoch(c.closed_at) <= as_of;
+  region_rows = SELECT t FROM BillingRegion:r -(RegionTxn:e)-> Txn:t
+    WHERE r.region == region_id AND t.epoch <= as_of;
+  region_cases = SELECT c FROM region_rows:t -(InvolvedIn:e)-> ClosedCase:c
+    WHERE datetime_to_epoch(c.closed_at) <= as_of;
+  cases = direct_cases UNION device_cases UNION region_cases;
+  memory_cases = SELECT f FROM FraudCase:f
+    WHERE f.card_id == card_id AND f.opened_epoch < as_of;
+  PRINT cases, memory_cases;
+}
+
+CREATE OR REPLACE QUERY similar_cases(LIST<FLOAT> query_vec, INT as_of, INT k)
+FOR GRAPH FraudGraph SYNTAX v3 {
+  MapAccum<VERTEX, FLOAT> @@distances;
+  closed = SELECT c FROM ClosedCase:c WHERE datetime_to_epoch(c.closed_at) <= as_of;
+  earlier = SELECT f FROM FraudCase:f WHERE f.opened_epoch < as_of;
+  candidates = closed UNION earlier;
+  hits = vectorSearch({ClosedCase.embedding, FraudCase.embedding}, query_vec, k,
+    {candidate_set: candidates, distance_map: @@distances});
+  PRINT hits;
+  PRINT @@distances AS distances;
+}
+
+CREATE OR REPLACE QUERY write_case(STRING case_id, STRING customer_id, STRING card_id,
+  INT opened_epoch, STRING verdict, STRING summary, STRING answer_json)
+FOR GRAPH FraudGraph {
+  INSERT INTO FraudCase VALUES (case_id, customer_id, card_id, opened_epoch,
+    verdict, summary, answer_json);
+  INSERT INTO InvestigatesCard VALUES (case_id, card_id);
+  PRINT case_id;
+}
+
+CREATE OR REPLACE QUERY get_documents() FOR GRAPH FraudGraph {
+  documents = SELECT d FROM DocChunk:d;
+  PRINT documents;
+}
+
+CREATE OR REPLACE QUERY case_library(INT as_of) FOR GRAPH FraudGraph {
+  cases = SELECT c FROM ClosedCase:c WHERE datetime_to_epoch(c.closed_at) <= as_of;
+  memory_cases = SELECT f FROM FraudCase:f WHERE f.opened_epoch < as_of;
+  PRINT cases, memory_cases;
+}
+
+CREATE OR REPLACE QUERY write_document(STRING doc_id, STRING source_id, STRING text_data)
+FOR GRAPH FraudGraph {
+  INSERT INTO DocChunk VALUES (doc_id, source_id, text_data);
+  PRINT doc_id;
+}
+
+// Weakly connected components using minimum-label propagation over Card-Device.
+// This is the standard tg_wcc algorithm specialized to our two entity types.
+// https://github.com/tigergraph/gsql-graph-algorithms/tree/master/algorithms/Community/connected_components/weakly_connected_components/standard
+// Components are contextual evidence, never independent proof of fraud.
+CREATE OR REPLACE QUERY tg_wcc(INT max_iter = 100) FOR GRAPH FraudGraph {
+  MinAccum<UINT> @component;
+  MinAccum<UINT> @previous;
+  OrAccum @@changed;
+  SetAccum<UINT> @@component_ids;
+  cards = SELECT c FROM Card:c;
+  devices = SELECT d FROM DeviceProfile:d;
+  vertices = cards UNION devices;
+  vertices = SELECT s FROM vertices:s
+    ACCUM s.@component += getvid(s), s.@previous += getvid(s);
+  @@changed = TRUE;
+  WHILE @@changed == TRUE LIMIT max_iter DO
+    @@changed = FALSE;
+    connected = SELECT t FROM vertices:s -((CardDevice|DeviceCard):e)-> :t
+      ACCUM t.@component += s.@component
+      POST-ACCUM
+        IF t.@component != t.@previous THEN @@changed += TRUE END,
+        t.@previous = t.@component;
+  END;
+  vertices = SELECT s FROM vertices:s ACCUM @@component_ids += s.@component;
+  PRINT vertices.size() AS vertex_count;
+  PRINT @@component_ids.size() AS component_count;
+  PRINT @@changed AS needs_more_iterations;
+}
+
+INSTALL QUERY ALL

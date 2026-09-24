@@ -1,0 +1,14 @@
+.env
+.venv/
+data/HHGOA_IEEE/
+data/graph/*.csv
+__pycache__/
+*.pkl
+HHGOA_IEEE/*.csv
+*.zip
+.pytest_cache/
+.ruff_cache/
+data/graph/*.json
+data/embeddings/
+data/runs/
+*.egg-info/

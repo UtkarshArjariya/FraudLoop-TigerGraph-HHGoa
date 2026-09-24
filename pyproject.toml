@@ -1,0 +1,24 @@
+[project]
+name = "fraudloop"
+version = "0.1.0"
+description = "Policy-driven, precedent-aware fraud investigation for HHGOA"
+requires-python = ">=3.12"
+dependencies = [
+  "pandas>=2.2", "numpy>=1.26", "pydantic>=2.10", "python-dotenv>=1.0",
+  "google-genai>=1.0", "tigergraph-mcp>=1.0.3", "mcp>=1.0", "tenacity>=9.0",
+  "pyTigerGraph>=2.0", "streamlit>=1.40", "pyvis>=0.3.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agent*", "scripts*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
