@@ -75,6 +75,8 @@ async def retrieve_indexes(graph, query_text, as_of, library, documents, trace):
         with index_lock(graph.use_local):
             for spec in index_specs(graph.use_local):
                 covered = covered_ids(spec, graph.use_local)
+                if graph.use_local and getattr(graph, "store", None) is not None:
+                    covered |= set(getattr(graph.store, "embedding_indexes", {}).get(spec.attribute, {}))
                 if not covered:
                     continue  # No vectors to query; do not download a model for an empty index.
                 detail = {"index": spec.key, "model": spec.model_id, "covered_ids": len(covered)}
