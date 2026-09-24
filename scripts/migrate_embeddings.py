@@ -6,6 +6,7 @@ mapped to Gemini 001; runtime reads/writes continue through the official MCP.
 import argparse
 from pathlib import Path
 import re
+import uuid
 
 from agent.embeddings import index_lock, index_specs, register_index
 from agent.model_registry import discover
@@ -53,9 +54,6 @@ def schema_additions(inventory, specs):
             additions.append(f'ALTER VERTEX {vertex} ADD ATTRIBUTE (embed_model STRING);')
         block = re.search(r'- ' + vertex + r':\s*\n((?:[ \t]+- [^\n]+\n?)+)', inventory)
         existing = set(re.findall(r'- (\w+)\(', block[1])) if block else set()
-        # Refuse to guess whether the original index exists if LS format changes.
-        if 'embedding' not in existing:
-            raise RuntimeError('Cannot verify preserved embedding attribute for ' + vertex)
         for spec in specs:
             if spec.attribute not in existing:
                 additions.append(f'ALTER VERTEX {vertex} ADD VECTOR ATTRIBUTE {spec.attribute}(DIMENSION=768, METRIC="COSINE");')
@@ -66,18 +64,23 @@ def migrate(container, *, registry=None):
     log = ROOT / 'data/runs/embedding_migration.log'
     log.parent.mkdir(parents=True, exist_ok=True)
     docker = ['docker', 'exec', '-u', 'tigergraph', container]
-    inventory = run([*docker, GSQL, 'LS'], log)
+    inventory = run([*docker, GSQL, 'USE GRAPH FraudGraph\nLS'], log)
     if not re.search(r'\bFraudGraph\b', inventory):
         raise RuntimeError('FraudGraph does not exist')
     specs = index_specs(registry=registry)
     additions = schema_additions(inventory, specs)
+    missing_legacy = [v for v in VERTEX_TYPES if any(f'ALTER VERTEX {v} ADD VECTOR ATTRIBUTE embedding(' in line for line in additions)]
+    if missing_legacy:
+        gem001 = next(s for s in specs if s.key == 'gem001')
+        register_index(gem001, legacy_recovery_required=True, legacy_missing_types=missing_legacy)
     if additions:
-        script = ('USE GLOBAL\nCREATE GLOBAL SCHEMA_CHANGE JOB fraudloop_multi_indexes {\n' +
-                  '\n'.join(additions) + '\n}\nRUN GLOBAL SCHEMA_CHANGE JOB fraudloop_multi_indexes\nDROP JOB fraudloop_multi_indexes\n')
+        job = 'fraudloop_multi_' + uuid.uuid4().hex[:10]
+        script = ('USE GLOBAL\nCREATE GLOBAL SCHEMA_CHANGE JOB ' + job + ' {\n' +
+                  '\n'.join(additions) + '\n}\nRUN GLOBAL SCHEMA_CHANGE JOB ' + job + ' -N\nDROP JOB ' + job + '\n')
         run([*docker, GSQL, script], log)
     base = (ROOT / 'gsql/03_queries.gsql').read_text().split('// MODEL INDEX QUERIES')[0]
     query_file = ROOT / 'data/runs/multi_index_queries.gsql'
-    installs = ['prior_cases'] + [name + '_' + spec.key for spec in specs for name in ('similar_cases', 'search_documents')]
+    installs = ['card_window', 'card_baseline', 'device_ring', 'region_cluster', 'prior_cases', 'case_library', 'write_case', 'get_documents', 'write_document', 'tg_wcc'] + [name + '_' + spec.key for spec in specs for name in ('similar_cases', 'search_documents')]
     query_file.write_text(base + vector_queries(specs) + '\n' + '\n'.join('INSTALL QUERY ' + name for name in installs) + '\n')
     run([*docker, 'mkdir', '-p', REMOTE], log)
     run(['docker', 'cp', str(query_file), f'{container}:{REMOTE}/multi_index_queries.gsql'], log)
