@@ -202,3 +202,15 @@ def test_empty_checked_chain_never_calls_sdk(sdk, monkeypatch):
     assert metrics['llm_model_used'] == 'template'
     assert metrics['llm_fallback_reason'] == 'no_discovered_models'
     factory.assert_not_called()
+
+
+def test_gemma_uses_plain_json_prompt_and_guarded_fence_parsing(sdk, monkeypatch):
+    _, client = sdk
+    monkeypatch.setattr(llm, 'model_chain', lambda *args: ['gemma-3-27b-it'])
+    client.models.generate_content.return_value = SimpleNamespace(parsed=None,
+        text='```json\n' + json.dumps({**WORDS, 'cited_entity_ids': ['C12345-K1']}) + '\n```')
+    words, metrics = asyncio.run(narrate()(BRIEF, WORDS, ALLOWED))
+    assert words == WORDS and metrics['llm_model_used'] == 'gemma-3-27b-it'
+    config = client.models.generate_content.call_args.kwargs['config']
+    assert config.system_instruction is None and config.thinking_config is None and config.response_schema is None
+    assert llm.SYSTEM_PROMPT in client.models.generate_content.call_args.kwargs['contents']
