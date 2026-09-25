@@ -1,0 +1,110 @@
+{
+  "voice_direction": "Warm, clear English product narration. Sound composed and conversational, with precise emphasis on evidence, changing recommendations and human review. Aim for 130–145 spoken words per minute, leaving a short natural pause at each scene boundary. Pronounce Fraud Loop as two words, TigerGraph as Tiger Graph, MCP as M C P, and GraphRAG as Graph Rag. Read percentages and approval levels naturally. Do not read scene identifiers or durations aloud.",
+  "scenes": [
+    {
+      "id": "01-intro",
+      "duration": 10,
+      "text": "Fraud Loop connects transaction evidence, historical cases and bank policy. Built around Tiger Graph and M C P, it makes investigations understandable and reviewable."
+    },
+    {
+      "id": "02-queue",
+      "duration": 16,
+      "text": "The queue brings verdicts and pending approvals together. Across twenty saved benchmark cases, nine are fraud, eight legitimate, and three uncertain. Two recommend suspicious activity reports. Every answer has passed validation."
+    },
+    {
+      "id": "03-case",
+      "duration": 12,
+      "text": "Start with case fourteen: an analyst's request about a shared device profile. The saved case keeps its trigger, affected transactions, evidence and timeline together."
+    },
+    {
+      "id": "04-graph",
+      "duration": 14,
+      "text": "This prepared-data graph connects twenty-six transactions across twenty card groups, with nearly thirty-eight hundred dollars in exposure. Nine groups still lack authoritative card identifiers and remain explicitly unresolved."
+    },
+    {
+      "id": "05-families",
+      "duration": 10,
+      "text": "Correlated signals are capped within evidence families. Shared devices alone do not establish fraud. The displayed probability is an evidence heuristic."
+    },
+    {
+      "id": "06-precedents",
+      "duration": 12,
+      "text": "Precedents show confirmed historical outcomes and the analysts' narratives. These saved answers predate detailed retrieval rankings, so the interface explicitly marks the unavailable provenance."
+    },
+    {
+      "id": "07-l2",
+      "duration": 14,
+      "text": "Policy recommends a card block and suspicious activity report, both requiring level two approval. Initial and final actions remain visible. No card was blocked or external report filed."
+    },
+    {
+      "id": "08-change",
+      "duration": 16,
+      "text": "Verification can also clear an alert. In case two, simulated customer confirmation lowers suspicion from about forty-three percent to four percent. Monitoring gives way to closing the alert, with zero final exposure."
+    },
+    {
+      "id": "09-stream",
+      "duration": 12,
+      "text": "Now the local simulator streams supplied historical transactions. A deliberately lowered threshold makes this example reproducible. The alert opens review; policy determines the outcome."
+    },
+    {
+      "id": "10-alert",
+      "duration": 10,
+      "text": "Each alert links to its case. The feed caps at five transactions per second, with one active investigation and ten waiting."
+    },
+    {
+      "id": "11-pause",
+      "duration": 12,
+      "text": "When authorization remains unresolved, the investigation pauses and saves its assessment. The request explains what evidence is needed, while keeping its precedent basis visible."
+    },
+    {
+      "id": "12-response",
+      "duration": 12,
+      "text": "Here, the demo analyst records a customer denial. The entry retains the selected level one role and timestamp. No real customer communication took place."
+    },
+    {
+      "id": "13-resume",
+      "duration": 14,
+      "text": "The denial changes the verdict from uncertain to fraud, raising suspicion from seventy point two to ninety-six percent. Case creation is automatic; a card block requires level one approval."
+    },
+    {
+      "id": "14-rag",
+      "duration": 12,
+      "text": "Graph Rag controls index weights, precedent counts, graph depth, time windows and similarity cutoffs. Each investigation freezes its settings, including while waiting for human evidence."
+    },
+    {
+      "id": "15-fusion",
+      "duration": 12,
+      "text": "Rank fusion combines available vector indexes with graph, pattern and narrative matches. This local preview exposes actual source contributions without inventing unavailable vector scores."
+    },
+    {
+      "id": "16-context",
+      "duration": 12,
+      "text": "Inspect the exact evidence brief prepared for narration. Policy code owns verdicts and actions. This preview calls no language model; the recorded investigation used templates."
+    },
+    {
+      "id": "17-approvals",
+      "duration": 12,
+      "text": "Reviewers see controls for their selected level, with decisions retained in an audit trail. These demo roles illustrate approval boundaries; they are not authentication."
+    },
+    {
+      "id": "18-memory",
+      "duration": 10,
+      "text": "Confirmed history stays distinct from agent conclusions, which can contain simulated replies. Retrieval respects each case's opening time to avoid future evidence."
+    },
+    {
+      "id": "19-data",
+      "duration": 10,
+      "text": "Data imports start with preview and require supervisor approval. Transaction rows must match the supplied dataset; local uploads remain staged for later ingestion."
+    },
+    {
+      "id": "20-proof",
+      "duration": 10,
+      "text": "All twenty answers passed schema, identity, exposure, chronology, route and policy checks. These validated outputs are not an accuracy claim against hidden answers."
+    },
+    {
+      "id": "21-close",
+      "duration": 8,
+      "text": "Fraud Loop: evidence first, every decision reviewable. Explore the queue, replay a case, and inspect the recommendations."
+    }
+  ]
+}

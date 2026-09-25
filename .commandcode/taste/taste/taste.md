@@ -18,3 +18,8 @@
 - Uses `main` as the canonical primary branch name (renamed from `master`); keep it that way for new repos and branch operations. Confidence: 0.75
 - Keeps the branch list tidy: once a feature/work branch is fully merged, delete it rather than leaving it around. Confidence: 0.65
 - Graph stack: TigerGraph CE in Docker (provisioning via `docker cp` + `gsql`), runtime graph access through tigergraph-mcp over stdio, Gemini via google-genai, pandas/pydantic/streamlit. Confidence: 0.7
+- Keeps a `docs/` set of publication artifacts (Medium blog draft plus publishing notes, LinkedIn/X social posts, video script) and asks for a refreshed version of the existing file rather than a fresh draft. Confidence: 0.7
+- Holds public-facing claims to a strict accuracy bar: simulated/demo replies explicitly labeled, validation counts distinguished from accuracy against a hidden key, and unmeasured benefits stated as unmeasured. Confidence: 0.75
+- When adding an enhancement to an existing deliverable, wants it emitted as a separate new file (e.g. a narrated copy of a demo video) with the original left untouched. Confidence: 0.6
+- Delegates submission packaging: expects required artifact layout (exact folder/filenames per the task spec) verified and submission-form wording drafted before pushing to GitHub. Confidence: 0.6
+- For project demos prefers a longer, detailed walkthrough (chose 3–5 minutes over a 2-minute judge cut or 60-second teaser) built from real app captures, with AI voiceover from ElevenLabs. Confidence: 0.55
