@@ -49,7 +49,16 @@ Live narration uses the configured Gemini fallback chain. Set `FRAUDLOOP_ENABLE_
 ```mermaid
 flowchart LR
     UI[React analyst console] --> API[FastAPI]
-    API --> Agent[Investigation state machine]
+    API --> Stream[Stream simulator]
+    Stream --> Detector[Detector]
+    Detector --> Queue[Bounded investigation queue]
+    Queue --> Agent[Investigation state machine]
+    API --> Agent
+    API --> RAG[Versioned RAG settings and context preview]
+    RAG --> RRF
+    Agent --> Pending[Persisted evidence request]
+    Pending --> Human[Analyst response]
+    Human --> Agent
     API --> Replay[Saved answers and replay timelines]
     Agent --> MCP[TigerGraph MCP ClientSession]
     MCP --> TG["TigerGraph CE 4.2.5"]
@@ -69,8 +78,8 @@ flowchart LR
 | TigerGraph | `FraudGraph` links Customer, Card, Txn, DeviceProfile, EmailDomain, BillingRegion, ClosedCase, DocChunk and FraudCase vertices. Prepared data contains 205,992 relevant transactions and 5,565 historical cases. |
 | GSQL and algorithms | Installed queries retrieve card windows/baselines, device and region neighborhoods, prior cases, documents, vectors and generated memory. Historical live WCC verification covered 13,831 Card–Device vertices and 4,954 components; connectivity is not itself proof of fraud. |
 | MCP | Runtime graph traffic uses the official TigerGraph MCP server through an MCP `ClientSession`. The backend serializes MCP/live work behind an asyncio lock and runs only one worker. Docker/GSQL is used for administration, not a hidden runtime query path. |
-| GraphRAG | Graph paths and analyst narratives combine with separate 768-dimensional model-owned vector indexes through RRF (`k=60`). Partial indexes remain useful; provenance and temporal eligibility are preserved. |
-| UI | React 18, Vite, TypeScript, Tailwind, TanStack Query, React Router and Cytoscape provide a queue, case detail/timeline, graph, precedents, approvals and memory pages. |
+| GraphRAG | Graph paths and analyst narratives combine with separate 768-dimensional model-owned vector indexes through configurable weighted RRF (default `k=60`). Partial indexes remain useful; provenance and temporal eligibility are preserved. |
+| UI | React 18, Vite, TypeScript, Tailwind, TanStack Query, React Router and Cytoscape provide a queue, case detail/timeline, graph, precedents, approvals, memory, GraphRAG controls and live monitoring pages. |
 | Agentic loop | `TRIGGER → GATHER → ASSESS → INITIAL_NBA → REQUEST_EVIDENCE → REASSESS → FINAL_NBA → SAR → WRITE_BACK → ANSWER`, with evidence requests and reassessment omitted when a defensible stopping condition already holds. |
 
 The agent chooses evidence requests around unresolved authorization, exposure and precedent evidence; records initial and final recommendations; enforces policy permissions; and stores completed investigations as retrievable case memory. Risk scores do not anchor its decision. Correlated signals are capped within evidence families, and retrieved historical outcomes are corrected for the fraud-heavy sample.
@@ -130,6 +139,131 @@ Live answers and replays are isolated in `cases_live/` and
 `data/timelines_live/`; the twenty graded answers and `data/timelines/` remain
 untouched. New live summary vectors use the existing BGE `emb_bge` attribute.
 
+## GraphRAG controls and context inspection
+
+Open **GraphRAG** at `/rag`. A supervisor can enable BGE, Gemma, Gemini 001 and
+Gemini 2 independently, adjust their RRF weights and `rrf_k`, select precedent and
+policy-chunk counts, and limit graph hops, retrieval lookback and minimum vector
+similarity. Settings persist in `data/rag_config.json`; **Reset to defaults**
+loads the defaults into the form, then **Save settings** applies them.
+
+`GET /api/rag/config` returns current settings and defaults. Supervisor-only
+`PUT /api/rag/config` validates the complete settings object. Every new
+investigation stores the settings in `metadata.rag_config`, and a paused human
+investigation retains its original snapshot even when the global config changes.
+The controls rank retrieval evidence; they do not replace the policy engine or
+change the provenance of confirmed historical outcomes.
+
+`POST /api/rag/preview` takes exactly one of `case_id` or `query_text`. It performs
+retrieval without a narration call or graph write. Inspect the **Precedents**,
+**Policy chunks**, **Graph paths** and **LLM context** tabs. Each result shows
+source ranks and weighted RRF contributions. The context uses the same compact
+serializer as live narration, with vectors excluded and excerpts marked when
+truncated. Estimated tokens use character length, not an API tokenizer.
+A free-text preview is retrieval-only and makes no policy verdict. A human case
+awaiting evidence shows its current context; the final brief depends on the
+response and reassessment.
+
+Disabled or zero-weight indexes are not queried. Minimum similarity filters
+actual cosine hits; lexical and graph fallbacks remain labeled. Hop depth limits
+the contributing graph paths (card 1 hop, device 3, region 4). Retrieval lookback
+filters precedents and case-linked documents while the policy's transaction
+history remains temporally bounded by the case opening time. An empty or
+unavailable index falls back to the available graph/narrative evidence.
+
+## Live monitor and detector
+
+Open **Live monitor** at `/live` as `supervisor_l2`. Choose a UTC start time,
+speed and evidence mode, then **Start stream**. **Pause** retains the cursor;
+**Stop** stops the feed and removes pending jobs from automatic scheduling.
+Already persisted cases remain available for manual review, and an active
+investigation continues. The default evidence mode is simulated; select Human
+for an interactive investigation.
+
+`backend/stream.py` reads the final two calendar months from the prepared local
+CSV using explicit columns and chunks, sorted by epoch and transaction ID. It
+keeps a narrow historical view for detection. The default rate is capped at five
+transactions/second. A multiplier below one slows it; higher values still cannot
+exceed the cap. Healthy graph contention applies backpressure, so actual
+throughput can be lower.
+
+Each transaction uses idempotent MCP upserts for existing Txn/entity types and
+edges, guarded by GSE health. The detector uses the installed `card_window`,
+`card_baseline` and `device_ring` queries, with timestamp-filtered local fallback
+when services fail. Its score combines risk band, capped velocity/testing,
+confirmed fraud on another card sharing a complete profile within seven days,
+and region novelty. The score only opens a review; case policy determines the
+verdict and recommendations.
+
+`data/detector_config.json` stores thresholds and signal parameters. Supervisor
+`PUT /api/detector/config` validates changes; `GET` returns config and defaults.
+At most one investigation runs and ten wait. Full queues and unresolved cards
+are disclosed in the alert queue status. Replaying an already-opened stream
+transaction links its existing case instead of duplicating investigations.
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/stream/start` | Supervisor; optional `start_date`, `speed_multiplier`, `mode_evidence` |
+| `POST /api/stream/pause` | Supervisor; pause the feed |
+| `POST /api/stream/stop` | Supervisor; stop the feed and automatic pending queue |
+| `GET /api/stream/status` | Cursor, counters, bounded recent feed/alerts/cases, graph state |
+| `GET /api/stream/events` | SSE `txn_ingested`, `alert_raised`, `case_opened`, `investigation_done`, `stream_status`; reconnect by Last-Event-ID |
+
+For the reproducible human demo, use threshold **0.25**, start time
+**2016-11-22 17:27:07 UTC**, speed **0.1**, and Human evidence. This selects
+transaction `3478782`; pause the feed when its case opens, switch to L1 and record
+**Customer denies**. The tested local flow recommends `BLOCK_CARD`/L1 and
+`CREATE_CASE`/auto. The threshold is lowered for this demonstration; restore the
+default **0.6** afterwards. No bank action is executed. Exact steps and service
+limitations are in [the upgrade report](docs/UPGRADE_REPORT.md).
+
+## Data uploads and pattern discovery
+
+Open **Data** at `/data` to preview a CSV or markdown/plain-text file. Commit
+requires `supervisor_l2` and the exact content, filename and preview ID. The API
+accepts JSON `{action, content, filename, preview_id}` at
+`POST /api/ingest/transactions` or `POST /api/ingest/policy`; the page reads the
+selected file into that request. Preview never writes graph data.
+
+Transaction imports accept prepared columns, or the supported original-column
+aliases shown by the API, up to 2 MiB and 2,000 rows. IDs must already exist in
+the prepared dataset, and supplied values must match it. This is deliberate
+reingestion of authoritative rows, not an arbitrary new transaction feed. The
+full 397-column source CSV and original fraud labels are rejected. Only supplied
+rows are upserted; the original CSV and pickle are preserved.
+
+Policy uploads are limited to 64 KiB and 64 deterministic chunks of at most
+1,200 characters. Commit uses cached CPU BGE weights and only existing
+`DocChunk.emb_bge`, under the existing index lock. It never downloads a model or
+uses Gemini. Uploaded prose is reference material; encoded policy still owns
+decisions. Missing weights, a busy index or an unavailable graph are disclosed.
+Local mode stages uploads without claiming graph or vector writes. Previews and
+durable per-item receipts live in `data/ingestion/`; retry preserves completed
+items and uses idempotent upserts. Policy vectors enter the BGE checkpoint only
+after successful MCP upload.
+
+The upload helper searches `FASTEMBED_CACHE_PATH` (default
+`/tmp/fastembed_cache`) and the configured Hugging Face cache for existing BGE
+ONNX weights. Set `FRAUDLOOP_BGE_MODEL_PATH` before starting the backend to use an
+existing model directory containing `model_optimized.onnx`, `tokenizer.json` and
+`config.json`. The final upgrade environment had no usable cached weights;
+native policy commits remain staged until that prerequisite is restored.
+
+On **Memory**, **Discover groups** calls `POST /api/patterns/discover` with
+`window_days` (1–183). The installed `tg_wcc` returns whole-graph aggregate counts
+only. Windowed memberships are computed separately from prepared Card–Device
+relationships and labeled accordingly; no query or schema is changed. Candidates
+require at least three card/device vertices, two cards from different customers,
+complete device profiles and no linked confirmed case with a documented typology
+by the review timestamp. Shared profiles remain weak evidence.
+
+**Open R9 review** calls `POST /api/patterns/open`, revalidates the component and
+queues an analyst request anchored to an actual component transaction. Choose
+**Run live** on that case to investigate. The action does not force an R9 finding
+or report. The real 30-day scan during verification returned no qualifying
+candidates; its native WCC counts and prepared memberships have separate
+provenance in [the upgrade report](docs/UPGRADE_REPORT.md).
+
 ## Docker Compose
 
 Compose starts **only the backend and frontend**. The existing TigerGraph container remains `tg`; this project does not create, replace, migrate, or reconfigure it. The default compose configuration uses local/replay mode, exposes only loopback ports, and does not mount the Docker socket.
@@ -140,6 +274,7 @@ test -f .env
 test -f data/transaction_store.pkl
 test -f HHGOA_IEEE/case_pack.csv
 test -d data/timelines
+mkdir -p cases_live
 export FRAUDLOOP_UID="$(id -u)"
 export FRAUDLOOP_GID="$(id -g)"
 docker compose config --quiet

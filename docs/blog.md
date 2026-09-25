@@ -86,4 +86,67 @@ Memory pressure mattered as much as model selection. The host has 16 GB, and the
 
 The next evaluation should measure calibration and false-positive costs on authorized held-out outcomes, rather than tune toward a desired verdict split. Better identity and merchant data would help distinguish genuine shared origins from common fingerprints and validate recurring-charge explanations without inventing merchant relationships.
 
-Real customer and analyst integrations would replace simulated replies with attributable evidence. A production deployment would also bind approval roles to authenticated bank identity, strengthen durable event storage, and reconcile checkpoint coverage with live vector inventory. The current submission makes those boundaries visible: evidence can change a recommendation, uncertainty can remain unresolved, and a report is a policy decision that a human still approves.
+The new human evidence path records attributable analyst responses; authenticated customer and bank integrations remain future work. A production deployment would also bind approval roles to authenticated bank identity, strengthen durable event storage, and reconcile checkpoint coverage with live vector inventory. The current submission makes those boundaries visible: evidence can change a recommendation, uncertainty can remain unresolved, and a report is a policy decision that a human still approves.
+
+
+## Human-in-the-loop evidence
+
+Live cases can now wait for an analyst instead of assuming a simulated reply.
+When the agent reaches an evidence request, it saves the assessment, the reason
+for the request, and its supporting precedents. It releases the graph session
+while waiting. The analyst can reload the page or restart the server and still
+answer the same request.
+
+A customer confirmation, denial, step-up result or analyst note resumes the
+saved case through reassessment and final recommendations. The answer records
+whether the evidence was human or simulated, the selected demo role and the
+response time. Notes stay attributable input; arbitrary prose cannot bypass the
+policy engine. The local role selector still needs authenticated identity in a
+bank deployment. No response executes a bank action.
+
+## GraphRAG controls
+
+The new GraphRAG page makes retrieval choices visible. A supervisor can change
+which indexes contribute, their weights, the fusion constant, the number of
+precedents and policy chunks, graph depth, lookback and minimum cosine similarity.
+These settings are captured with each investigation, including cases paused for
+human evidence.
+
+The playground retrieves without calling the narration model or writing graph
+data. It shows per-index ranks, fusion contributions and graph-path provenance,
+then exposes the compact evidence brief and exact serialized model context.
+This separates an observable retrieval change from a vague claim that changing
+an AI setting improved the answer. Historical bank outcomes remain distinct from
+generated case memory, and repeated retrieval does not multiply a fact's weight.
+
+## Live detection
+
+A bounded simulator replays the final two months of prepared transactions in
+timestamp order. The detector combines a risk band with card velocity/testing,
+recent confirmed-fraud device history and region novelty. An alert is a reason to
+investigate, not a fraud verdict. The stream defaults to at most five
+transactions per second, with one investigation at a time and at most ten
+pending jobs.
+
+The live monitor connects the feed to alert reasons and automatically opened
+cases. New investigations use separate live answer and timeline directories, so
+the graded submission and its replay remain intact. Runtime writes use MCP and
+existing graph types only. The write guard attempts one GSE restart during an
+outage, then discloses local fallback if service remains unavailable. Actual
+throughput can be lower than the configured ceiling when graph work is slow.
+
+## Reference ingestion and pattern discovery
+
+The Data page previews uploads before a supervisor commits them. Transaction
+reingestion preserves authoritative IDs and values. Reference documents are
+split into stable chunks and use the existing BGE index through MCP. Receipts
+distinguish completed writes from local staging and preserve progress on retry.
+An unavailable model cache or a busy embedding index is visible to the operator.
+Uploaded prose cannot replace the encoded bank policy.
+
+Memory now offers discovery of previously undocumented card-device groups.
+The existing native WCC query supplies aggregate counts; windowed membership is
+derived separately from prepared relationships and identified as such. An R9
+review starts from a real transaction in the candidate group and leaves the
+finding to the investigation. The current 30-day scan found no qualifying new
+group. Connectivity is a lead to investigate, not a fraud label.

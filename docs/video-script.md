@@ -28,3 +28,27 @@ Start the demo with `make demo`. Open `http://localhost:5173/`. Before recording
 - Screenshots should be captured from the actual running interface. Suggested files: `docs/screenshots/queue.png`, `hhg-014-detail.png`, `graph.png`, and `approvals.png`.
 
 If the UI uses a different displayed label from this script, update the click instruction to the final label before recording. The routes and case IDs are the stable navigation targets.
+
+
+## Additional 60-second live segment
+
+Prepare `/live` before recording. For deterministic local output use
+`FRAUDLOOP_LOCAL_ONLY=1 FRAUDLOOP_ENABLE_LLM=0 make demo`; retain the visible local
+fallback banner. A healthy native run uses MCP instead. As supervisor, set the
+detector threshold to **0.25**, start time to **2016-11-22T17:27:07 UTC**, speed to
+**0.1**, and evidence responses to **Human**. This is a deliberately lowered demo
+threshold and selects supplied transaction `3478782`. Restore **0.6** afterwards.
+If the stream has already opened this transaction, it links the existing case;
+use that case instead of claiming a second investigation was created.
+
+| Time | Clicks | Narration |
+|---|---|---|
+| 0:00–0:12 | As supervisor at `/live`, click **Start stream**. Point to transaction `3478782`, the alert reason and its new case link. | “The simulator streams supplied transactions through a detector. Its risk score opens a review; it does not decide fraud. For this short example I have lowered the alert threshold.” |
+| 0:12–0:22 | Click **Pause**, then open the auto-created case. Point to **Evidence requested**, the reason, precedents and Initial NBA. | “The agent gathers graph and historical evidence, then pauses because authorization is unresolved. Its assessment is persisted while it waits.” |
+| 0:22–0:35 | Select **Analyst · L1**. Add a short note if useful, then click **Customer denies**. | “I record a customer denial as the analyst. The record identifies the human evidence source, my demo role and the response time. This is an analyst entry, not an authenticated customer channel.” |
+| 0:35–0:50 | Follow the resuming timeline and highlighted **What changed**. Show Final NBA. | “The same investigation reassesses. The tested case now recommends BLOCK_CARD routed to L1 and CREATE_CASE routed automatically. Higher exposure can require L2; a SAR always requires L2. The system has not blocked a card or filed a report.” |
+| 0:50–1:00 | Briefly open `/rag` and show an existing preview's **LLM context** tab, then return to `/live` and **Stop**. | “Retrieval settings are captured with the case. I can inspect the exact compact model context and each source's contribution, while saved benchmark answers and replays remain untouched.” |
+
+Do not promise an L2 route or SAR for this lower-exposure example. Its actual
+policy result is BLOCK_CARD/L1 plus CREATE_CASE/auto. Use the existing HHG-014
+replay from the main script when demonstrating L2 routing.

@@ -119,3 +119,21 @@
 - Chrome verified the authentic empty result, provenance and responsive Memory
   view without errors. No schema changes, graph writes, embeddings or fabricated
   pattern examples were needed. Native evidence is in upgrade-verification.json.
+
+## Final handoff
+
+- Feature commits are `8a31e4b` (human), `9de862f` (RAG), `d15e7a4` (stream),
+  `585c867` (ingestion) and `8dd5fda` (discovery), all on `upgrade-live`.
+- Updated README architecture/setup, blog sections and a separate 60-second
+  live video segment. UPGRADE_REPORT has exact human/stream/upload/discovery
+  demos, validation commands and limitations. Five verified screenshots and
+  structured browser/native verification are included.
+- Latest suite: 286 tests passed in 6.24s; 20 answers validate. Frontend build,
+  TypeScript, Python compilation, pip consistency and whitespace checks pass.
+  All 42 protected file hashes match. No schema file or safe tag was changed.
+- Native policy upload remains unverified: BGE weights are missing locally,
+  and operator index locking is honored. Native RAG preview fell back while
+  that lock was busy. Gemini text availability was not probed; browser live
+  runs used explicit local/template mode with truthful graph=false status.
+- All assistant-owned demo servers and test browsers were stopped. No merge,
+  push, graph migration or embedding ingestion job was performed.

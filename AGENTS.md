@@ -240,3 +240,29 @@ Cache: `data/embeddings/gemini-embedding-001-768.json`. Model: `gemini-embedding
   idempotent Txn/edge upserts preserved existing attributes. Real Chrome tested
   stream -> alert -> human case -> denial -> final NBA using isolated local
   outputs. Exact demo start is 2016-11-22T17:27:07Z, threshold0.25, speed0.1.
+- Stretch ingestion is implemented in `backend/ingest.py` and `/data`. JSON
+  upload requests bind exact preview content and supervisor commits. CSVs may
+  reingest only authoritative prepared IDs/values. Reference chunks use existing
+  BGE/emb_bge with index ownership and the operator lock; receipts preserve
+  completed items through retry/outage. No native policy upload was performed.
+  The current Fastembed/HF cache had no BGE weights. Missing weights stage the
+  upload with a clear message; `FRAUDLOOP_BGE_MODEL_PATH` can select existing
+  ONNX weights. Uploads never download models or modify the original store.
+- `backend/patterns.py` and the Memory page run native tg_wcc for aggregate
+  counts and separately derive labeled windowed Card–Device memberships from
+  prepared data. The installed query does not return memberships; no schema or
+  GSQL query was changed. Native WCC converged at 13,831 vertices/4,954 components.
+  The real 30-day scan returned zero qualifying undocumented mixed-customer
+  groups. Open R9 review revalidates a candidate and preserves its exact component
+  transaction; policy still owns any R9 finding or SAR recommendation.
+- Final upgrade checks: 286 Python tests in 6.24s, all 20 graded validations,
+  frontend build/TypeScript, compilation, pip and diff checks pass. Chrome tested
+  human/RAG/live/data/discovery flows and 375/768/1280 widths without errors.
+  Native MCP checks covered existing idempotent Txn/edge writes and read-only
+  WCC; Gemini text availability and native document uploads were not verified.
+  Operator ingestion was preserved; native RAG vectors fell back while its lock
+  was busy. All 42 protected hashes match, including `.env` and original pickle.
+- Work is committed only on `upgrade-live`; do not merge or push without the
+  user's next instruction. See `docs/UPGRADE_REPORT.md`, `docs/upgrade-log.md`,
+  `docs/upgrade-verification.json` and five upgrade screenshots. README/blog and
+  the video script include the new flows and exact 60-second live demo steps.

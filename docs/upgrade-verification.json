@@ -1,0 +1,155 @@
+{
+  "protected_files_unchanged": 42,
+  "core_pytest_passed": 267,
+  "verification": {
+    "human-browser": {
+      "checks": [
+        "Human request persisted and viewer cannot respond",
+        "Pending evidence survives browser reload",
+        "Human denial resumes SSE to validated final answer",
+        "Answer contains human attribution, block/create recommendations, graph=false",
+        "No horizontal overflow at 375/768/1280px"
+      ],
+      "errors": [],
+      "case_id": "CASE-D3FE696DED10",
+      "final_actions": [
+        {
+          "action": "CREATE_CASE",
+          "route": "auto",
+          "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+        },
+        {
+          "action": "BLOCK_CARD",
+          "route": "L1",
+          "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+        }
+      ]
+    },
+    "rag-browser": {
+      "checks": [
+        "Supervisor setting persists and selected precedent count changes actual preview",
+        "All four result tabs load",
+        "Free-text preview returns retrieval-only context without policy verdict",
+        "RAG page has no horizontal overflow at375/768/1280px"
+      ],
+      "errors": []
+    },
+    "live-browser": {
+      "checks": [
+        "Supervisor starts exact UTC stream and alert auto-opens human case",
+        "Pause, bounded queue and disclosed local fallback work",
+        "Auto case resumes from human denial to policy final NBA with captured RAG config",
+        "Feed stops cleanly; no console errors or overflow375/768/1280"
+      ],
+      "errors": [],
+      "case_id": "CASE-1B66836BDCF7",
+      "final_actions": [
+        {
+          "action": "CREATE_CASE",
+          "route": "auto"
+        },
+        {
+          "action": "BLOCK_CARD",
+          "route": "L1"
+        }
+      ]
+    },
+    "stream-native": {
+      "txn_id": "3478782",
+      "graph": {
+        "source": "tigergraph-mcp",
+        "written_to_graph": true,
+        "warning": null,
+        "vertices_upserted": 4,
+        "edges_upserted": 4
+      },
+      "existing_attributes_unchanged": true,
+      "alert_score": 0.25,
+      "checks": {
+        "velocity_count": 1,
+        "card_testing": false,
+        "confirmed_case_ids": [],
+        "new_region": false,
+        "baseline_count": 35
+      },
+      "range": {
+        "start": "2016-10-31T23:58:54+00:00",
+        "end": "2016-12-31T23:58:54+00:00"
+      }
+    },
+    "stretch-browser": {
+      "checks": [
+        "Viewer can preview the canonical transaction but cannot commit",
+        "Supervisor transaction commit stages locally with zero claimed graph writes",
+        "Synthetic policy preview and commit stage locally without graph or vector writes",
+        "An altered authoritative amount is rejected before commit",
+        "Authentic 30-day discovery returns no qualifying candidates and discloses unavailable native WCC",
+        "Data and Memory remain within375/768/1280px viewport widths"
+      ],
+      "errors": [],
+      "receipts": {
+        "transactions": {
+          "status": "staged_locally",
+          "written_to_graph": false,
+          "counts": {
+            "total": 1,
+            "completed": 0,
+            "staged": 1,
+            "failed": 0
+          }
+        },
+        "policy": {
+          "status": "staged_locally",
+          "written_to_graph": false,
+          "counts": {
+            "total": 1,
+            "completed": 0,
+            "staged": 1,
+            "failed": 0
+          }
+        }
+      },
+      "pattern": {
+        "components": 0,
+        "source": "prepared_card_device_connectivity",
+        "native_wcc_scope": "whole_graph_unwindowed_aggregate_only",
+        "native_wcc": null,
+        "warnings": [
+          "Local-only mode: native tg_wcc was not run. Component details use prepared dataset relationships."
+        ]
+      }
+    },
+    "patterns-native": {
+      "native_wcc": {
+        "vertex_count": 13831,
+        "component_count": 4954,
+        "needs_more_iterations": false
+      },
+      "native_wcc_scope": "whole_graph_unwindowed_aggregate_only",
+      "component_source": "prepared_card_device_connectivity",
+      "as_of": "2016-12-31T23:58:54+00:00",
+      "window_start": "2016-12-01T23:58:54+00:00",
+      "window_days": 30,
+      "source_rows": 205992,
+      "candidate_count": 0,
+      "prepared_component_count": 56,
+      "prepared_edge_count": 3816,
+      "excluded_documented_components": 1,
+      "results_truncated": false,
+      "warnings": [],
+      "no_llm": true,
+      "written_to_graph": false,
+      "disclosure": "Candidate components use prepared Card\u2013Device relationships in the requested time window. Native tg_wcc provides only whole-graph aggregate counts, not these memberships. Shared or generic profiles are weak evidence. Open R9 review creates an analyst request; policy alone determines fraud, pattern, and reporting.",
+      "returned_components": 0
+    },
+    "cached-policy-embedding": {
+      "success": false,
+      "reason": "BGE model weights absent from configured Fastembed cache",
+      "download_attempted": false,
+      "graph_write_attempted": false,
+      "recovery": "Missing weights stage policy uploads with an actionable cache message; no download or new graph write."
+    }
+  },
+  "full_pytest_passed": 286,
+  "full_pytest_seconds": 6.24
+}
