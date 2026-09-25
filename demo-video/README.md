@@ -39,7 +39,9 @@ The final folder contains:
 - `segments/`: cached video segments. These can be removed after final delivery
   if resumable rendering is no longer needed.
 
-No third-party music, generated voice, stock footage, or remote media is used.
+The original captioned export uses no third-party music, generated voice, stock
+footage, or remote media. The separate narrated edition described below adds
+ElevenLabs speech to that original video.
 
 ## Scene manifest
 
@@ -124,3 +126,48 @@ ffprobe -v error -show_entries format=duration,size:stream=codec_name,codec_type
 
 Retain `render.py`, `scenes.json`, and `assets/` together to edit or reproduce the
 film. Application development and media rendering are independent.
+
+## ElevenLabs narrated edition
+
+`out/fraudloop-demo-narrated.mp4` adds English narration to the same four-minute,
+ten-second video. The original `fraudloop-demo.mp4` remains unchanged. The new
+file copies the original video packets, chapter markers and original subtitle
+track. It mixes narration with quieter original transition sounds, and adds an
+optional subtitle track matching the spoken narration.
+
+Voice: **Daniel — Steady Broadcaster**, generated with **ElevenLabs** using
+`eleven_multilingual_v2`. The voice is a provided stock voice; no voice cloning
+was used. `narration.json` contains the editable script and the original scene
+schedule. Only this spoken project description was sent to ElevenLabs; no
+video, screenshots, datasets or saved case payloads were uploaded.
+
+```bash
+# Reuses matching audio already saved under out/voiceover/.
+# If generation is needed, provide ELEVENLABS_API_KEY privately in the environment.
+.venv/bin/python demo-video/generate_voiceover.py --dry-run
+.venv/bin/python demo-video/generate_voiceover.py
+
+# All remaining steps are offline. They never read API keys.
+.venv/bin/python demo-video/add_narration.py --dry-run
+.venv/bin/python demo-video/add_narration.py
+```
+
+The generation helper defaults to the delivered voice and speed setting. It
+saves each scene immediately, so an interrupted run can resume without paying
+to generate unchanged scenes again. It does not write credentials to project
+files. An explicitly supplied `--key-file` should be a private temporary file
+removed after generation.
+
+The assembler conservatively removes only silence at clip boundaries, places
+each section 0.3 seconds into its matching scene, and rejects speech that needs
+more than 1.18× additional acceleration. The delivered clips fit without any
+such additional acceleration. It normalizes the voice and audio mix, checks
+the encoded loudness, and verifies identical video packets and timing before
+publishing a separate output. `--overwrite` can replace a prior narrated
+export; it always refuses to overwrite the original video.
+
+Additional outputs are `out/fraudloop-demo-narrated.srt`,
+`out/voiceover/narration-master.wav`, `out/voiceover/narration-mix.wav`, and
+`out/voiceover/timing-report.json`. The report records every scene's timing,
+audio normalization, and original-video preservation checks. Generated files
+remain under the existing gitignored `out/` directory.

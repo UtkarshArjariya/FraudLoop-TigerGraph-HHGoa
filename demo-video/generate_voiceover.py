@@ -35,7 +35,7 @@ def main():
     parser.add_argument("--output", type=Path, default=ROOT / "out/voiceover")
     parser.add_argument("--key-file", type=Path)
     parser.add_argument("--voice-id", default=VOICE_ID)
-    parser.add_argument("--speed", type=float, default=1.03)
+    parser.add_argument("--speed", type=float, default=1.2)
     parser.add_argument("--scene", action="append", help="Generate selected scene IDs only")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

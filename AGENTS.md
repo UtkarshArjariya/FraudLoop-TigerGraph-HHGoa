@@ -305,3 +305,26 @@ Cache: `data/embeddings/gemini-embedding-001-768.json`. Model: `gemini-embedding
   checked. No application source, schema, operator configuration or embeddings
   were changed. Assistant-started capture servers were stopped. Nothing was
   published, pushed or merged.
+
+## Separate narrated demo (2026-09-25)
+
+- At the user's request, `demo-video/out/fraudloop-demo-narrated.mp4` adds
+  ElevenLabs English narration to the original demo. It is still exactly 250
+  seconds, 1920×1080/30 fps. All 7,500 original video packets and timestamps,
+  the original subtitle stream, and all 21 chapter markers were verified
+  identical. The original `fraudloop-demo.mp4` file hash is unchanged.
+- `demo-video/narration.json` holds the 21 synchronized spoken sections.
+  `generate_voiceover.py` uses the official ElevenLabs API and stock Daniel
+  voice with `eleven_multilingual_v2`; only narration text was sent. The
+  provided credential was held in a private temporary file and removed after
+  generation; it was not added to project configuration or source.
+- `add_narration.py` works offline, trims only edge silence, retains pauses,
+  mixes the original effects quietly, and stream-copies the original video.
+  Every delivered speech section fits its scene without additional time
+  compression. Encoded mix: -16.02 LUFS and -1.97 dBTP.
+- The separate output includes 61 narration-caption cues, with an SRT sidecar.
+  `out/fraudloop-narration.mp3` provides the synchronized voice-only track.
+  Voice clips, alignment, masters and preservation evidence are under
+  `demo-video/out/voiceover/`. Current reproduction commands and provenance are
+  in `demo-video/README.md`. No application, graph, dataset or protected answer
+  changes were needed.
