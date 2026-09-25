@@ -4,7 +4,7 @@ FRAUDLOOP investigates the 20 HHGOA fraud alerts using TigerGraph evidence, hist
 
 All bank actions are recommendations. Evidence responses are either disclosed deterministic simulations or human entries attributed to the answering demo role and timestamp. Generated case memory is an earlier agent conclusion, not a confirmed historical bank outcome. Evidence is bounded by each case's `opened_at`; original Kaggle fraud labels are never used.
 
-The preserved graded answers contain **9 fraud, 8 legitimate and 3 uncertain judgments, with 2 SAR recommendations**. All 20 passed schema, dataset-ID, exposure, chronology, route and policy validation at the overnight baseline. These are policy-engine judgments, not measured accuracy against the hidden answer key. See [the complete policy audit](docs/policy-audit.md), [the blog draft](docs/blog.md), [the four-minute video script](docs/video-script.md), and [the morning delivery report](docs/MORNING_REPORT.md).
+The preserved graded answers contain **9 fraud, 8 legitimate and 3 uncertain judgments, with 2 SAR recommendations**. All 20 passed schema, dataset-ID, exposure, chronology, route and policy validation at the overnight baseline. These are policy-engine judgments, not measured accuracy against the hidden answer key. See [the complete policy audit](docs/policy-audit.md), [the Medium-ready technical article](docs/medium-blog.md), [the four-minute video script](docs/video-script.md), and [the morning delivery report](docs/MORNING_REPORT.md).
 
 ## Start the analyst console
 

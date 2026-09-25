@@ -1,0 +1,68 @@
+{
+  "date": "2026-09-25",
+  "protected_files_checked": 42,
+  "protected_files_unchanged": true,
+  "changed_protected_files": [],
+  "live_case": "CASE-538683EDCE28",
+  "verdict": "fraud",
+  "probability": 0.96,
+  "actions": [
+    {
+      "action": "CREATE_CASE",
+      "route": "auto",
+      "reason": "Section 3a: probability is at least 0.30, evidence is requested, a charge is disputed, or the investigation record is already open. R2: retain the denied transaction and investigation evidence in a case."
+    },
+    {
+      "action": "BLOCK_CARD",
+      "route": "L1",
+      "reason": "R2: the customer denies the transaction; recommend blocking and reissuing this card. R1 and section 2: the assessed fraud is not a weak signal requiring verification before blocking; apply the exposure-based approval route."
+    }
+  ],
+  "written_to_graph": false,
+  "metadata": {
+    "llm_model_used": "template",
+    "llm_attempts": 0,
+    "mode_evidence": "human",
+    "rag_config": {
+      "enabled_indexes": {
+        "bge": true,
+        "gemma": true,
+        "gem001": true,
+        "gem2": true
+      },
+      "rrf_weights": {
+        "bge": 1.0,
+        "gemma": 1.0,
+        "gem001": 1.0,
+        "gem2": 1.0
+      },
+      "rrf_k": 60,
+      "top_k_precedents": 5,
+      "top_k_policy_chunks": 12,
+      "graph_hop_depth": 4,
+      "time_window_days": 365,
+      "min_similarity": -1.0,
+      "graph_similarity_weight": 1.0
+    }
+  },
+  "render": {
+    "duration_seconds": 250.0,
+    "bytes": 17948397,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "chapters": 21,
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "subtitle_codec": "mov_text",
+    "sampled_exported_frames": [
+      8,
+      44,
+      93,
+      157,
+      194,
+      237
+    ],
+    "full_video_audio_decode_passed": true
+  }
+}

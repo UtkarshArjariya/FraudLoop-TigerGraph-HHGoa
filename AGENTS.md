@@ -266,3 +266,42 @@ Cache: `data/embeddings/gemini-embedding-001-768.json`. Model: `gemini-embedding
   user's next instruction. See `docs/UPGRADE_REPORT.md`, `docs/upgrade-log.md`,
   `docs/upgrade-verification.json` and five upgrade screenshots. README/blog and
   the video script include the new flows and exact 60-second live demo steps.
+
+## Medium technical article (2026-09-25)
+
+- `docs/medium-blog.md` is a cohesive publication draft covering the problem,
+  architecture, graph evidence, weighted RRF, deterministic policy, guarded
+  narration, human evidence, live simulator, reliability and practical limits.
+  `docs/medium-blog.html` is the formatted copy/paste version; regenerate its
+  article body from Markdown if the draft changes.
+- `docs/blog-assets/` contains the editable architecture SVG, upload-ready PNG,
+  and two crops of existing verification screenshots. Publishing metadata,
+  image instructions and the source fact-check map are in
+  `docs/medium-publishing-notes.md`. Nothing was published to Medium.
+- All 20 saved answers were revalidated during article preparation. The article
+  attributes the 286-test and browser results to the recorded upgrade checks;
+  those checks were not rerun for this documentation task. No model/graph calls,
+  answer regeneration, configuration changes or secret-value reads were needed.
+
+## Detailed demo video (2026-09-25)
+
+- `demo-video/out/fraudloop-demo.mp4` is a 4:10, 1920×1080/30 fps edited
+  walkthrough from actual browser captures, with explanatory captions, original
+  subtle transition sounds, an English subtitle track and 21 chapter markers.
+  It is an animated screenshot edit, not an uninterrupted screen recording.
+- Editable sources are `demo-video/render.py`, `demo-video/scenes.json` and
+  `demo-video/assets/`. Rendering is offline with Pillow/NumPy/FFmpeg. See
+  `demo-video/README.md` and `demo-video/CAPTURE_NOTES.md`; `out/` is gitignored.
+  Output includes an SRT, poster, contact sheet and editable-source ZIP.
+- Captures used an isolated temporary runtime with local graph mode and LLM
+  disabled. Saved HHG-014/002 screens retain historical/simulation labels. A
+  fresh demo stream selected transaction 3478782 at threshold 0.25 and opened
+  CASE-538683EDCE28 in the temporary root. A demo L1 denial changed 0.702 uncertain
+  to 0.960 fraud, with CREATE_CASE/auto and BLOCK_CARD/L1, graph=false and zero
+  LLM attempts. No approval/import was submitted or external bank action taken.
+- All 20 saved answers passed validation. All 42 protected file hashes matched,
+  including `.env`, graded answers, original timelines and transaction store.
+  The final MP4 decoded without errors; sampled exported frames were visually
+  checked. No application source, schema, operator configuration or embeddings
+  were changed. Assistant-started capture servers were stopped. Nothing was
+  published, pushed or merged.

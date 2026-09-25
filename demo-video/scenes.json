@@ -1,0 +1,314 @@
+{
+  "scenes": [
+    {
+      "id": "01-intro",
+      "type": "hero",
+      "chapter": "Evidence first",
+      "title": "From fraud alert to reviewable decision.",
+      "caption": "FRAUDLOOP connects transaction evidence, historical cases and bank policy in one investigation workflow.",
+      "duration": 10,
+      "badge": "TigerGraph HHGOA · Project demo",
+      "tags": [
+        "Graph evidence",
+        "Explicit policy",
+        "Human review"
+      ]
+    },
+    {
+      "id": "02-queue",
+      "type": "product",
+      "chapter": "01 / The investigation queue",
+      "title": "Start with the cases that need review.",
+      "caption": "The queue brings verdicts, uncertainty, SAR recommendations and pending approvals into one place. These 20 benchmark outputs have all passed validation.",
+      "duration": 16,
+      "asset": "assets/queue.png",
+      "focus": [
+        182,
+        80,
+        922,
+        824
+      ],
+      "badge": "Saved benchmark answers",
+      "url": "FRAUDLOOP / Case queue"
+    },
+    {
+      "id": "03-case",
+      "type": "product",
+      "chapter": "02 / Follow the evidence",
+      "title": "One alert. A connected investigation.",
+      "caption": "HHG-014 starts with an analyst request about a shared device profile. The case preserves the trigger, affected transactions, evidence and investigation timeline.",
+      "duration": 12,
+      "asset": "assets/hhg014-top.png",
+      "focus": [
+        181,
+        83,
+        925,
+        821
+      ],
+      "badge": "HHG-014 · Saved case",
+      "url": "FRAUDLOOP / HHG-014"
+    },
+    {
+      "id": "04-graph",
+      "type": "product",
+      "chapter": "02 / Follow the evidence",
+      "title": "Explore connections beyond one transaction.",
+      "caption": "The scoped episode contains 26 transactions across 20 card groups, with $3,778.14 exposure. Nine groups lack authoritative card IDs and remain explicitly unresolved.",
+      "duration": 14,
+      "asset": "assets/graph.png",
+      "badge": "Prepared-data graph view",
+      "url": "FRAUDLOOP / HHG-014 / Graph",
+      "footer": "Local graph view · Historical case evidence · No new graph write"
+    },
+    {
+      "id": "05-families",
+      "type": "product",
+      "chapter": "02 / Follow the evidence",
+      "title": "Count independent evidence carefully.",
+      "caption": "Correlated signals are capped within evidence families. A shared device or a high alert score alone does not decide fraud. The displayed probability is an evidence heuristic.",
+      "duration": 10,
+      "asset": "assets/hhg014-evidence.png",
+      "badge": "Policy owns the decision",
+      "url": "FRAUDLOOP / Evidence contributions"
+    },
+    {
+      "id": "06-precedents",
+      "type": "product",
+      "chapter": "02 / Follow the evidence",
+      "title": "Read the historical precedent.",
+      "caption": "Analysts can inspect confirmed bank outcomes and their narratives. These preserved answers predate detailed rank provenance, so the console labels those missing measurements.",
+      "duration": 12,
+      "asset": "assets/precedents.png",
+      "badge": "Historical bank outcomes",
+      "url": "FRAUDLOOP / HHG-014 / Precedents"
+    },
+    {
+      "id": "07-l2",
+      "type": "product",
+      "layout": "wide",
+      "chapter": "03 / Policy and approval",
+      "title": "Make the approval route explicit.",
+      "caption": "HHG-014 recommends a card block and suspicious activity report with L2 review. Initial and final recommendations remain visible. No card was blocked and no external report was filed.",
+      "duration": 14,
+      "asset": "assets/actions-l2.png",
+      "badge": "BLOCK CARD · L2 / FILE REPORT · L2",
+      "url": "FRAUDLOOP / HHG-014 / Recommendations",
+      "footer": "Bank actions are recommendations · SAR draft requires L2 approval"
+    },
+    {
+      "id": "08-change",
+      "type": "product",
+      "layout": "wide",
+      "chapter": "03 / Decisions can change",
+      "title": "Verification can clear an alert.",
+      "caption": "In HHG-002, explicitly simulated customer confirmation changes suspicion from about 43% to 4%. Verification and monitoring become CLOSE NO FRAUD, with zero final exposure.",
+      "duration": 16,
+      "asset": "assets/hhg002-actions.png",
+      "badge": "Saved replay · Simulated confirmation",
+      "url": "FRAUDLOOP / HHG-002 / Before and after",
+      "footer": "Simulated response · Saved benchmark result · Not an observed customer reply"
+    },
+    {
+      "id": "09-stream",
+      "type": "product",
+      "chapter": "04 / Live workflow",
+      "title": "A transaction becomes a review.",
+      "caption": "The simulator replays supplied historical transactions. For this local demonstration, a disclosed 0.25 threshold admits transaction 3478782. The alert score opens review; policy decides the outcome.",
+      "duration": 12,
+      "asset": "assets/live-alert-top.png",
+      "focus": [
+        181,
+        82,
+        923,
+        822
+      ],
+      "badge": "Historical-data simulator",
+      "url": "FRAUDLOOP / Live monitor",
+      "footer": "Local demo · Threshold 0.25 · No transaction graph writes"
+    },
+    {
+      "id": "10-alert",
+      "type": "product",
+      "chapter": "04 / Live workflow",
+      "title": "Keep the alert reason with the case.",
+      "caption": "The alert links directly to its investigation. The feed is bounded to five transactions per second, with one active investigation and at most ten waiting jobs.",
+      "duration": 10,
+      "asset": "assets/live-alert-detail.png",
+      "badge": "One alert · One linked investigation",
+      "url": "FRAUDLOOP / Live monitor / Alert",
+      "footer": "Historical-data simulator · Local mode · No bank action executed"
+    },
+    {
+      "id": "11-pause",
+      "type": "product",
+      "chapter": "05 / Human evidence",
+      "title": "Pause when authorization is unresolved.",
+      "caption": "The investigation saves its assessment and asks for customer validation. The request explains why more evidence is needed and shows the precedent basis while it waits.",
+      "duration": 12,
+      "asset": "assets/human-pending.png",
+      "focus": [
+        181,
+        88,
+        923,
+        817
+      ],
+      "badge": "Fresh local investigation",
+      "url": "FRAUDLOOP / Human evidence request",
+      "footer": "Local demo · Analyst input is attributed evidence, not authenticated customer contact"
+    },
+    {
+      "id": "12-response",
+      "type": "product",
+      "chapter": "05 / Human evidence",
+      "title": "Record the response and its source.",
+      "caption": "Here the demo analyst records a customer denial. The response retains the selected L1 role and timestamp. This is a demonstration entry, not a real customer communication.",
+      "duration": 12,
+      "asset": "assets/human-input.png",
+      "badge": "Demo analyst · L1",
+      "url": "FRAUDLOOP / Evidence response",
+      "footer": "Demonstration evidence entry · No customer was contacted"
+    },
+    {
+      "id": "13-resume",
+      "type": "product",
+      "layout": "wide",
+      "chapter": "05 / Human evidence",
+      "title": "Reassess the same investigation.",
+      "caption": "The recorded denial changes the verdict from uncertain to fraud. CREATE CASE is automatic; BLOCK CARD requires L1 approval. The console explains exactly what changed.",
+      "duration": 14,
+      "asset": "assets/human-final-actions.png",
+      "badge": "70.2% → 96.0% · Evidence heuristic",
+      "url": "FRAUDLOOP / Reassessment / Final actions",
+      "footer": "Local execution · Graph write false · Card block remains a recommendation"
+    },
+    {
+      "id": "14-rag",
+      "type": "product",
+      "chapter": "06 / Inspect GraphRAG",
+      "title": "Control what retrieval brings into context.",
+      "caption": "GraphRAG exposes index weights, precedent counts, graph depth, time windows and similarity cutoffs. Each investigation freezes its settings, including while waiting for human evidence.",
+      "duration": 12,
+      "asset": "assets/rag-settings.png",
+      "focus": [
+        183,
+        86,
+        924,
+        818
+      ],
+      "badge": "Configurable retrieval",
+      "url": "FRAUDLOOP / GraphRAG",
+      "footer": "Enabling an index uses available coverage · It does not create embeddings"
+    },
+    {
+      "id": "15-fusion",
+      "type": "product",
+      "chapter": "06 / Inspect GraphRAG",
+      "title": "See why a precedent was retrieved.",
+      "caption": "Rank fusion combines available vector indexes with graph, pattern and narrative matches. This local preview shows each source's rank and contribution, without inventing vector scores.",
+      "duration": 12,
+      "asset": "assets/rag-fusion-focus.png",
+      "badge": "Source-level provenance",
+      "url": "FRAUDLOOP / Retrieval contributions",
+      "footer": "Local preview · Available graph and text matches · No narration or graph writes"
+    },
+    {
+      "id": "16-context",
+      "type": "product",
+      "chapter": "06 / Inspect GraphRAG",
+      "title": "Inspect the exact narration context.",
+      "caption": "The inspector reveals the compact evidence brief prepared for the language model. Policy code owns verdicts and actions; optional model narration must stay within those decisions.",
+      "duration": 12,
+      "asset": "assets/rag-context-final.png",
+      "focus": [
+        487,
+        210,
+        621,
+        697
+      ],
+      "badge": "Exact context · Read-only preview",
+      "url": "FRAUDLOOP / GraphRAG / LLM context",
+      "footer": "No LLM was called for this preview · This demo uses template narration"
+    },
+    {
+      "id": "17-approvals",
+      "type": "product",
+      "chapter": "07 / Review and retain",
+      "title": "Consequential actions stay reviewable.",
+      "caption": "Viewers can inspect recommendations. L1 and L2 roles expose their allowed review controls, and decisions have an audit trail. The role switcher is a local demo mechanism, not authentication.",
+      "duration": 12,
+      "asset": "assets/approvals-focus.png",
+      "badge": "Demo approval boundaries",
+      "url": "FRAUDLOOP / Approvals",
+      "footer": "No approval was submitted during capture · No external action executed"
+    },
+    {
+      "id": "18-memory",
+      "type": "product",
+      "layout": "wide",
+      "chapter": "07 / Review and retain",
+      "title": "Remember outcomes with their provenance.",
+      "caption": "Confirmed historical bank outcomes remain distinct from earlier agent conclusions, which may include simulated replies. Retrieval is bounded by each case's opening time.",
+      "duration": 10,
+      "asset": "assets/memory-provenance.png",
+      "badge": "History and memory are distinct",
+      "url": "FRAUDLOOP / Case memory"
+    },
+    {
+      "id": "19-data",
+      "type": "product",
+      "chapter": "07 / Review and retain",
+      "title": "Preview data before committing it.",
+      "caption": "The Data page separates preview from supervisor commit. Transaction rows must match the supplied dataset. Native policy commits use the BGE index; local uploads remain staged.",
+      "duration": 10,
+      "asset": "assets/data.png",
+      "focus": [
+        185,
+        84,
+        936,
+        648
+      ],
+      "badge": "Controlled ingestion",
+      "url": "FRAUDLOOP / Data",
+      "footer": "Import controls shown only · No data upload or graph migration performed"
+    },
+    {
+      "id": "20-proof",
+      "type": "proof",
+      "chapter": "Verified deliverables",
+      "title": "Twenty answers. Explicit uncertainty.",
+      "caption": "All 20 saved answer files pass schema, identifier, exposure, chronology, route and policy validation. These are validated output counts, not an accuracy claim.",
+      "duration": 10,
+      "stats": [
+        {
+          "value": "20",
+          "label": "Validated answers"
+        },
+        {
+          "value": "9 / 8 / 3",
+          "label": "Fraud / legitimate / uncertain"
+        },
+        {
+          "value": "2",
+          "label": "SAR recommendations"
+        }
+      ],
+      "badge": "Verified for this video",
+      "footer": "Saved benchmark results · Validation is not accuracy against a hidden answer key"
+    },
+    {
+      "id": "21-close",
+      "type": "end",
+      "chapter": "FRAUDLOOP",
+      "title": "Evidence first. Every decision reviewable.",
+      "caption": "Explore the case queue, replay an investigation, and inspect the evidence behind every recommendation.",
+      "duration": 8,
+      "badge": "Explore the demo",
+      "tags": [
+        "TigerGraph + MCP",
+        "Human evidence",
+        "Policy-led decisions"
+      ],
+      "footer": "TigerGraph HHGOA · FRAUDLOOP · Local walkthrough with simulated/demo evidence"
+    }
+  ]
+}

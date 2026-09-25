@@ -1,10 +1,10 @@
 {
-  "threshold": 0.6,
+  "threshold": 1.0,
   "high_risk_score": 0.7,
   "medium_risk_score": 0.3,
   "velocity_count": 5,
   "velocity_window_minutes": 60,
   "card_testing_count": 3,
-  "small_amount": 5,
+  "small_amount": 5.0,
   "new_region_days": 183
 }

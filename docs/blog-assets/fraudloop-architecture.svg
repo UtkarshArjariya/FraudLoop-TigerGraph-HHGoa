@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2200" height="2330" viewBox="0 0 2200 2330" role="img" aria-labelledby="title desc">
+<title id="title">FRAUDLOOP system architecture</title>
+<desc id="desc">An analyst console and bounded prepared-data stream feed a FastAPI backend and Python investigation state machine. Python assessment and policy own decisions. GraphRAG combines graph, narrative and per-model ranks using weighted reciprocal rank fusion. All runtime graph reads and writes use an official TigerGraph MCP ClientSession. Guarded Gemini narration follows policy decisions, and strict answer validation gates graph write-back. Human evidence pause and resume, local answers and timelines are persisted.</desc>
+<rect width="2200" height="2330" fill="#F5F7F3"/>
+<style>text {font-family: 'DejaVu Sans', sans-serif; fill: #132F2D;} .muted {fill: #536964;} .teal {fill: #167565;}</style>
+<text x="90" y="105" font-size="72" font-weight="700" fill="#132F2D">FRAUDLOOP</text>
+<text x="91" y="165" font-size="38" font-weight="400" fill="#536964">From suspicious activity to an auditable recommendation</text>
+<text x="1910" y="105" font-size="23" font-weight="700" fill="#167565">ARCHITECTURE</text>
+<path d="M90 195 H2110" stroke="#C7D4CD" stroke-width="2"/>
+<rect x="90" y="240" width="980" height="185" rx="20" fill="#FFFFFF" stroke="#C7D4CD" stroke-width="2.5"/>
+<text x="128" y="294" font-size="43" font-weight="700" fill="#132F2D">React analyst console</text>
+<text x="128" y="345" font-size="35" font-weight="400" fill="#536964">Queue · graph · evidence · approvals</text>
+<text x="128" y="394" font-size="35" font-weight="400" fill="#536964">Case timelines, replay and live monitoring</text>
+<rect x="1170" y="240" width="940" height="185" rx="20" fill="#FFFFFF" stroke="#C7D4CD" stroke-width="2.5"/>
+<text x="1208" y="294" font-size="43" font-weight="700" fill="#132F2D">Prepared-data stream</text>
+<text x="1208" y="345" font-size="35" font-weight="400" fill="#536964">Timestamped transaction replay</text>
+<text x="1208" y="394" font-size="35" font-weight="400" fill="#536964">Bounded at five transactions / second</text>
+<path d="M580 425 V467" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M569 462 L580 480 L591 462 Z" fill="#8CA29B"/>
+<path d="M1640 425 V467" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M1629 462 L1640 480 L1651 462 Z" fill="#8CA29B"/>
+<rect x="90" y="480" width="980" height="160" rx="20" fill="#E8F3EE" stroke="#92B9AC" stroke-width="2.5"/>
+<text x="128" y="537" font-size="43" font-weight="700" fill="#132F2D">FastAPI backend</text>
+<text x="128" y="592" font-size="35" font-weight="400" fill="#536964">REST endpoints + server-sent events (SSE)</text>
+<rect x="1170" y="480" width="940" height="160" rx="20" fill="#E8F3EE" stroke="#92B9AC" stroke-width="2.5"/>
+<text x="1208" y="537" font-size="40" font-weight="700" fill="#132F2D">Detector → investigation queue</text>
+<text x="1208" y="592" font-size="34" font-weight="400" fill="#536964">One active investigation · ten pending jobs</text>
+<path d="M580 640 V702" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M569 697 L580 715 L591 697 Z" fill="#8CA29B"/>
+<path d="M1640 640 V702" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M1629 697 L1640 715 L1651 697 Z" fill="#8CA29B"/>
+<rect x="90" y="715" width="2020" height="310" rx="20" fill="#E0EEE7" stroke="#74A391" stroke-width="2.5"/>
+<rect x="118" y="743" width="8" height="254" rx="4" fill="#167565"/>
+<text x="150" y="778" font-size="47" font-weight="700" fill="#132F2D">Python investigation state machine</text>
+<text x="150" y="838" font-size="38" font-weight="400" fill="#132F2D">Trigger → gather → assess → initial next best action</text>
+<text x="150" y="891" font-size="38" font-weight="400" fill="#132F2D">Request evidence → reassess → final action → SAR → answer</text>
+<path d="M150 922 H2050" stroke="#ACCCBD" stroke-width="2"/>
+<text x="150" y="977" font-size="35" font-weight="400" fill="#536964">Persisted human pause / resume · Conditional stopping · Chronological evidence</text>
+<path d="M580 1025 V1107" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M569 1102 L580 1120 L591 1102 Z" fill="#8CA29B"/>
+<path d="M1640 1035 V1107" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M1629 1102 L1640 1120 L1651 1102 Z" fill="#8CA29B"/>
+<path d="M1629 1043 L1640 1025 L1651 1043 Z" fill="#8CA29B"/>
+<text x="705" y="1084" font-size="27" font-weight="700" fill="#167565">Decision path</text>
+<text x="1743" y="1084" font-size="27" font-weight="700" fill="#167565">Evidence path</text>
+<rect x="90" y="1120" width="980" height="215" rx="20" fill="#FFFFFF" stroke="#C7D4CD" stroke-width="2.5"/>
+<rect x="118" y="1148" width="8" height="159" rx="4" fill="#167565"/>
+<text x="148" y="1177" font-size="43" font-weight="700" fill="#132F2D">Assessment + policy</text>
+<text x="148" y="1230" font-size="35" font-weight="400" fill="#536964">Python owns verdicts, probabilities,</text>
+<text x="148" y="1279" font-size="35" font-weight="400" fill="#536964">recommended actions and approval routes.</text>
+<text x="148" y="1312" font-size="30" font-weight="400" fill="#167565">Capped evidence families · Explicit stopping rules</text>
+<path d="M580 1335 V1407" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M569 1402 L580 1420 L591 1402 Z" fill="#8CA29B"/>
+<rect x="90" y="1420" width="980" height="190" rx="20" fill="#FFFFFF" stroke="#C7D4CD" stroke-width="2.5"/>
+<text x="128" y="1477" font-size="43" font-weight="700" fill="#132F2D">Guarded Gemini narration</text>
+<text x="128" y="1531" font-size="34" font-weight="400" fill="#536964">Explains decisions and cites retrieved evidence</text>
+<text x="128" y="1580" font-size="34" font-weight="400" fill="#536964">Model fallback chain → template fallback</text>
+<path d="M580 1610 V1682" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M569 1677 L580 1695 L591 1677 Z" fill="#8CA29B"/>
+<rect x="90" y="1695" width="980" height="225" rx="20" fill="#E8F3EE" stroke="#92B9AC" stroke-width="2.5"/>
+<text x="128" y="1752" font-size="43" font-weight="700" fill="#132F2D">Strict answer validation</text>
+<text x="128" y="1807" font-size="34" font-weight="400" fill="#536964">Schema · dataset IDs · time bounds</text>
+<text x="128" y="1856" font-size="34" font-weight="400" fill="#536964">Exposure · policy · routes · decision integrity</text>
+<text x="128" y="1890" font-size="34" font-weight="700" fill="#167565">Must pass before graph write-back</text>
+<rect x="1170" y="1120" width="940" height="270" rx="20" fill="#FFFFFF" stroke="#C7D4CD" stroke-width="2.5"/>
+<rect x="1198" y="1148" width="8" height="214" rx="4" fill="#167565"/>
+<text x="1228" y="1177" font-size="43" font-weight="700" fill="#132F2D">GraphRAG retrieval</text>
+<text x="1228" y="1230" font-size="34" font-weight="400" fill="#536964">Graph paths + analyst narrative matches</text>
+<text x="1228" y="1279" font-size="34" font-weight="400" fill="#536964">Separate model-owned vector ranks</text>
+<text x="1228" y="1328" font-size="34" font-weight="400" fill="#536964">Weighted RRF · Temporal eligibility</text>
+<text x="1228" y="1366" font-size="30" font-weight="400" fill="#167565">Provenance retained for every source</text>
+<path d="M1640 1400 V1457" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M1629 1452 L1640 1470 L1651 1452 Z" fill="#8CA29B"/>
+<path d="M1629 1408 L1640 1390 L1651 1408 Z" fill="#8CA29B"/>
+<rect x="1170" y="1470" width="940" height="150" rx="20" fill="#E8F3EE" stroke="#92B9AC" stroke-width="2.5"/>
+<text x="1208" y="1528" font-size="43" font-weight="700" fill="#132F2D">Official TigerGraph MCP</text>
+<text x="1208" y="1584" font-size="33" font-weight="400" fill="#536964">ClientSession · All runtime graph reads / writes</text>
+<path d="M1640 1630 V1682" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M1629 1677 L1640 1695 L1651 1677 Z" fill="#8CA29B"/>
+<path d="M1629 1638 L1640 1620 L1651 1638 Z" fill="#8CA29B"/>
+<rect x="1170" y="1695" width="940" height="225" rx="20" fill="#FFFFFF" stroke="#C7D4CD" stroke-width="2.5"/>
+<text x="1208" y="1752" font-size="43" font-weight="700" fill="#132F2D">TigerGraph / FraudGraph</text>
+<text x="1208" y="1807" font-size="34" font-weight="400" fill="#536964">Entities + edges · GSQL queries · WCC</text>
+<text x="1208" y="1856" font-size="34" font-weight="400" fill="#536964">Model-owned vectors · FraudCase memory</text>
+<text x="1208" y="1890" font-size="32" font-weight="400" fill="#167565">New live case vectors use BGE / emb_bge</text>
+<path d="M580 1920 V1997" fill="none" stroke="#8CA29B" stroke-width="4.5"/>
+<path d="M569 1992 L580 2010 L591 1992 Z" fill="#8CA29B"/>
+<rect x="90" y="2010" width="2020" height="180" rx="20" fill="#FFFFFF" stroke="#C7D4CD" stroke-width="2.5"/>
+<text x="128" y="2066" font-size="43" font-weight="700" fill="#132F2D">Durable local state and replay</text>
+<text x="128" y="2120" font-size="36" font-weight="400" fill="#536964">Validated answers + traces + timelines · Persisted human continuations</text>
+<text x="128" y="2170" font-size="32" font-weight="400" fill="#167565">Live outputs are isolated from the preserved benchmark submission.</text>
+<text x="90" y="2270" font-size="34" font-weight="500" fill="#536964">Recommendations only • Human/simulated evidence labeled • Local fallback disclosed</text>
+</svg>
