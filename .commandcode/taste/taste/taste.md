@@ -16,4 +16,5 @@
 - On memory-constrained machines, reads large CSVs with `usecols`, explicit dtypes, and chunking — never loads all columns. Confidence: 0.8
 - Python 3.12 project venv, invoked as `.venv/bin/python -m scripts.<name>`; pytest for the test suite. Confidence: 0.7
 - Uses `main` as the canonical primary branch name (renamed from `master`); keep it that way for new repos and branch operations. Confidence: 0.75
+- Keeps the branch list tidy: once a feature/work branch is fully merged, delete it rather than leaving it around. Confidence: 0.65
 - Graph stack: TigerGraph CE in Docker (provisioning via `docker cp` + `gsql`), runtime graph access through tigergraph-mcp over stdio, Gemini via google-genai, pandas/pydantic/streamlit. Confidence: 0.7
