@@ -20,7 +20,7 @@ import {
   human,
   percent,
 } from "../components";
-import type { QueueCase } from "../types";
+import type { EvidenceMode, QueueCase } from "../types";
 function NewInvestigation() {
   const ref = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -29,6 +29,7 @@ function NewInvestigation() {
   const [type, setType] = useState("risk_signal");
   const [id, setId] = useState("");
   const [text, setText] = useState("");
+  const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>("simulated");
   const mutation = useMutation({
     mutationFn: (body: object) =>
       api<{ case_id: string; stream_url: string }>("/investigations", {
@@ -45,10 +46,11 @@ function NewInvestigation() {
     event.preventDefault();
     mutation.mutate(
       type === "risk_signal"
-        ? { type, txn_id: id.trim() }
+        ? { type, txn_id: id.trim(), mode_evidence: evidenceMode }
         : {
             type,
             card_id: id.trim(),
+            mode_evidence: evidenceMode,
             [type === "customer_report" ? "text" : "note"]: text.trim(),
           },
     );
@@ -133,6 +135,28 @@ function NewInvestigation() {
               />
             </>
           )}
+          <fieldset className="evidence-mode-field">
+            <legend>Evidence responses</legend>
+            <div className="segmented-control">
+              {(["simulated", "human"] as const).map((value) => (
+                <label key={value}>
+                  <input
+                    type="radio"
+                    name="evidence-mode"
+                    value={value}
+                    checked={evidenceMode === value}
+                    onChange={() => setEvidenceMode(value)}
+                  />
+                  <span>{value === "human" ? "Human" : "Simulated"}</span>
+                </label>
+              ))}
+            </div>
+            <p className="helper">
+              {evidenceMode === "human"
+                ? "Pause for an analyst or supervisor when the agent needs evidence."
+                : "Use disclosed, deterministic replies to complete the investigation."}
+            </p>
+          </fieldset>
           <p className="helper">
             Use IDs from the prepared dataset. The case is saved separately from
             graded answers.

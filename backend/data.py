@@ -45,7 +45,9 @@ class Repository:
         self.root = root
         self.data = root / "data"
         self.cases = root / "cases"
-        self.runtime = self.data / "runtime_cases"
+        self.runtime = root / "cases_live"
+        self.legacy_runtime = self.data / "runtime_cases"
+        self.live_timelines = self.data / "timelines_live"
         self.triggers_path = self.data / "runtime_triggers.json"
         self.approvals_path = self.data / "approvals.json"
 
@@ -57,15 +59,16 @@ class Repository:
     def answer(self, case_id):
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", case_id):
             return None
-        value = read_json(self.runtime / f"{case_id}.json") or read_json(self.cases / f"{case_id}.json")
+        value = (read_json(self.runtime / f"{case_id}.json") or
+                 read_json(self.legacy_runtime / f"{case_id}.json") or read_json(self.cases / f"{case_id}.json"))
         return value.get("answer") if isinstance(value, dict) and "answer" in value else value
 
     def answers(self):
-        identifiers = {p.stem for folder in (self.cases, self.runtime) for p in folder.glob("*.json")}
+        identifiers = {p.stem for folder in (self.cases, self.legacy_runtime, self.runtime) for p in folder.glob("*.json")}
         return {cid: answer for cid in sorted(identifiers) if (answer := self.answer(cid))}
 
     def timeline(self, case_id):
-        snapshot = read_json(self.runtime / f"{case_id}.json", {})
+        snapshot = read_json(self.runtime / f"{case_id}.json") or read_json(self.legacy_runtime / f"{case_id}.json", {})
         if isinstance(snapshot.get("timeline"), list):
             return snapshot["timeline"]
         for folder in ("runtime_timelines", "timelines"):
@@ -77,7 +80,7 @@ class Repository:
         return []
 
     def trace(self, case_id):
-        snapshot = read_json(self.runtime / f"{case_id}.json", {})
+        snapshot = read_json(self.runtime / f"{case_id}.json") or read_json(self.legacy_runtime / f"{case_id}.json", {})
         if isinstance(snapshot.get("trace"), dict):
             return snapshot["trace"]
         return read_json(self.data / "runtime_traces" / f"{case_id}.json") or read_json(
@@ -147,6 +150,7 @@ class Repository:
             "trigger_text": body.get("text") or body.get("note") or f"Analyst requested a risk review of dataset transaction {txn['txn_id']}.",
             "flagged_txn_id": txn["txn_id"], "card_id": txn["card_id"], "customer_id": txn["customer_id"],
             "risk_score": txn.get("risk_score") or "0", "runtime_case": True,
+            "mode_evidence": body.get("mode_evidence", "simulated"),
             "temporal_note": "Retrospective investigation; opened_at is the selected transaction timestamp."}
 
     def history(self):

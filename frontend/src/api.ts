@@ -1,4 +1,4 @@
-import type { Role, TimelineEvent } from "./types";
+import type { EvidenceMode, Role, TimelineEvent } from "./types";
 export let activeRole: Role =
   (localStorage.getItem("fraudloop-role") as Role) || "viewer";
 export function setApiRole(role: Role) {
@@ -33,9 +33,12 @@ export async function streamCase(
   mode: "live" | "replay",
   signal: AbortSignal,
   receive: (event: TimelineEvent) => void,
+  evidenceMode: EvidenceMode = "simulated",
+  streamUrl?: string,
 ) {
   const response = await fetch(
-    `/api/cases/${encodeURIComponent(caseId)}/investigate?mode=${mode}`,
+    streamUrl ||
+      `/api/cases/${encodeURIComponent(caseId)}/investigate?mode=${mode}&mode_evidence=${evidenceMode}`,
     { method: "POST", headers: { "X-Role": activeRole }, signal },
   );
   if (!response.ok || !response.body) {

@@ -200,3 +200,92 @@ def test_reconstruction_rejects_unrelated_trace_and_leaves_initial_unknown(inves
     initial = next(event["payload"] for event in events if event["event_type"] == "assessment")
     assert initial["probability"] is None and initial["verdict"] is None
     assert all(event["elapsed_ms"] is None for event in events)
+
+
+def test_human_pause_is_json_serializable_and_resume_never_regathers(investigation):
+    module, case = investigation
+    graph = FakeGraph()
+    recorder = EventRecorder(case["case_id"])
+    with pytest.raises(module.EvidencePaused) as paused:
+        asyncio.run(module.investigate(case, graph, emit=recorder.emit, live=True, mode_evidence="human"))
+    snapshot = json.loads(json.dumps(paused.value.snapshot))
+    assert snapshot["trace"]["states"][-1]["state"] == "REQUEST_EVIDENCE"
+    assert paused.value.request["source"] == "human"
+    assert paused.value.request["precedent_ids"] == ["CC-1"]
+    assert not any(name == "write_case" for name, _ in graph.calls)
+    assert not any(event["event_type"] in {"done", "error", "evidence_received"} for event in recorder.events)
+    response = {"request_id": "request-1", "response_type": "customer_denies", "note": "Recorded denial.",
+                "answered_by": "analyst_l1", "answered_at": "2026-09-25T12:00:00+00:00"}
+    resumed = FakeGraph()
+    answer, trace = asyncio.run(module.investigate(case, resumed, emit=recorder.emit, live=True,
+        mode_evidence="human", resume_state=snapshot, evidence_response=response))
+    assert [name for name, _ in resumed.calls] == ["write_case"]
+    assert answer["case"]["verdict"] == "fraud"
+    assert answer["case"]["fraud_probability"] == .96
+    assert answer["evidence_requests"][0]["source"] == "human"
+    assert answer["evidence_requests"][0]["answered_by"] == "analyst_l1"
+    assert answer["metadata"]["mode_evidence"] == "human"
+    assert "human-recorded" in answer["next_best_actions"]["what_changed"]
+    assert "simulated" not in answer["case"]["summary"].lower()
+    assert trace["tool_calls"] == graph.tool_calls + resumed.tool_calls
+    assert any(action["action"] == "BLOCK_CARD" for action in answer["next_best_actions"]["final"])
+
+
+@pytest.mark.parametrize("kind,expected", [("customer_confirms", "confirmed"),
+    ("customer_denies", "denied"), ("stepup_passed", "confirmed"),
+    ("stepup_failed", "failed"), ("analyst_note", "inconclusive")])
+def test_typed_human_response_has_no_free_text_policy_parser(kind, expected):
+    from agent.investigate import human_response
+    response, text = human_response({"response_type": kind, "note": "Customer confirms and customer denies: ambiguous free text.",
+        "answered_by": "supervisor_l2", "answered_at": "2026-09-25T12:00:00+00:00"})
+    assert response == expected
+    assert text.startswith("HUMAN evidence recorded by supervisor_l2")
+
+
+def test_live_case_embeddings_write_only_bge(investigation, monkeypatch):
+    from types import SimpleNamespace
+    module, case = investigation
+    specs = [SimpleNamespace(key=key, attribute=attribute, model_id=key)
+             for key, attribute in [("gem001", "embedding"), ("bge", "emb_bge"), ("gem2", "emb_gem2")]]
+    monkeypatch.setattr(module, "index_specs", lambda *_: specs)
+    monkeypatch.setattr(module, "covered_ids", lambda *_: {"CC-1"})
+    monkeypatch.setattr(module, "provider_for", lambda model: model)
+    embedded = []
+    async def embed(provider, texts):
+        embedded.append(provider)
+        return [[0.] * 768]
+    monkeypatch.setattr(module, "embed_vectors", embed)
+    graph = FakeGraph()
+    writes = []
+    async def upsert(vertex_type, vectors, *, attribute):
+        writes.append(attribute)
+    graph.upsert_vectors = upsert
+    asyncio.run(module.investigate(case, graph, live=True))
+    assert embedded == ["bge"] and writes == ["emb_bge"]
+
+
+def test_live_prewrite_validator_sees_final_policy_and_prevents_mutations(investigation):
+    module, case = investigation
+    graph = FakeGraph()
+    def reject(answer, trace):
+        assert answer["case"]["written_to_graph"] is False
+        assert trace["final_probability"] == answer["case"]["fraud_probability"]
+        assert trace["final_policy_context"]["customer_response"] == "confirmed"
+        assert not any(name == "write_case" for name, _ in graph.calls)
+        raise ValueError("Synthetic candidate rejection")
+    with pytest.raises(ValueError, match="Synthetic candidate rejection"):
+        asyncio.run(module.investigate(case, graph, live=True, validate_before_write=reject))
+    assert not any(name == "write_case" for name, _ in graph.calls)
+
+
+def test_raw_human_note_remains_attributed_and_does_not_become_a_claim(investigation):
+    module, case = investigation
+    with pytest.raises(module.EvidencePaused) as paused:
+        asyncio.run(module.investigate(case, FakeGraph(), live=True, mode_evidence="human"))
+    note = "Unverified CC-999999 unresolved:foo and customer confirms are operator notes."
+    answer, _ = asyncio.run(module.investigate(case, FakeGraph(), live=True, mode_evidence="human",
+        resume_state=paused.value.snapshot, evidence_response={"request_id": "request-1", "response_type": "analyst_note",
+            "note": note, "answered_by": "analyst_l1", "answered_at": "2026-09-25T12:00:00+00:00"}))
+    assert answer["evidence_requests"][0]["note"] == note
+    assert answer["case"]["verdict"] == "uncertain"
+    assert all("CC-999999" not in item["claim"] for item in answer["case"]["evidence"])

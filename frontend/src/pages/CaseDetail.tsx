@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
+  AlertTriangle,
   Check,
   ChevronDown,
   Database,
@@ -31,11 +32,15 @@ import type {
   Approval,
   Answer,
   CaseDetail as Detail,
+  EvidenceMode,
+  EvidenceResponse,
+  PendingEvidence,
   Precedent,
   TimelineEvent,
   Verdict,
 } from "../types";
 import "./detail.css";
+import EvidencePanel from "./EvidencePanel";
 const GraphPanel = lazy(() => import("./GraphPanel"));
 const eventLabels: Record<string, string> = {
   TRIGGER: "Trigger received",
@@ -135,9 +140,17 @@ function Families({ families }: { families: Record<string, number> }) {
     </div>
   );
 }
-function ActionList({ title, actions }: { title: string; actions: Action[] }) {
+function ActionList({
+  title,
+  actions,
+  reveal = false,
+}: {
+  title: string;
+  actions: Action[];
+  reveal?: boolean;
+}) {
   return (
-    <section className="nba-column">
+    <section className={`nba-column ${reveal ? "final-nba-reveal" : ""}`}>
       <h3>
         {title}
         <span>{actions.length} actions</span>
@@ -229,8 +242,20 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
   if (type === "evidence_received")
     return (
       <li className="timeline-request received">
-        <span className="source-chip">Simulated response</span>
-        <p>{asText(payload.assumed_response)}</p>
+        <span className="source-chip">
+          {payload.source === "human" ? "Human response" : "Simulated response"}
+        </span>
+        <p>
+          {asText(payload.assumed_response) ||
+            asText(payload.response) ||
+            human(asText(payload.response_type))}
+        </p>
+        {payload.source === "human" && (
+          <small>
+            {human(asText(payload.answered_by))}
+            {payload.answered_at ? ` · ${asText(payload.answered_at)}` : ""}
+          </small>
+        )}
       </li>
     );
   if (type === "nba_initial" || type === "nba_final")
@@ -354,6 +379,12 @@ export default function CaseDetail() {
   const query = useQuery({
     queryKey: ["case", id],
     queryFn: () => api<Detail>(`/cases/${id}`),
+    refetchInterval: (query) =>
+      ["awaiting_evidence", "running", "investigating"].includes(
+        query.state.data?.status || "",
+      )
+        ? 3000
+        : false,
   });
   const approvals = useQuery({
     queryKey: ["approvals"],
@@ -367,6 +398,13 @@ export default function CaseDetail() {
   const [mode, setMode] = useState<"live" | "replay" | null>(null);
   const [streamError, setStreamError] = useState("");
   const [runAnswer, setRunAnswer] = useState<Answer | null>(null);
+  const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>("simulated");
+  const [livePending, setLivePending] = useState<
+    PendingEvidence | null | undefined
+  >(undefined);
+  const [evidenceSubmitting, setEvidenceSubmitting] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
+  const [evidenceSubmitted, setEvidenceSubmitted] = useState(false);
   const [follow, setFollow] = useState(true);
   const controller = useRef<AbortController | null>(null);
   const scroll = useRef<HTMLDivElement>(null);
@@ -375,13 +413,26 @@ export default function CaseDetail() {
     setRunAnswer(null);
     setMode(null);
     setStreamError("");
+    setLivePending(undefined);
+    setEvidenceError("");
+    setEvidenceSubmitted(false);
+    setEvidenceSubmitting(false);
     return () => controller.current?.abort();
   }, [id]);
+  useEffect(() => {
+    if (query.data?.trigger.mode_evidence)
+      setEvidenceMode(query.data.trigger.mode_evidence);
+    if (!controller.current) setLivePending(undefined);
+  }, [query.data]);
   useEffect(() => {
     if (follow && mode && scroll.current)
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [streamEvents, follow, mode]);
-  async function start(selected: "live" | "replay") {
+  async function start(
+    selected: "live" | "replay",
+    resume = false,
+    streamUrl?: string,
+  ) {
     controller.current?.abort();
     const abort = new AbortController();
     controller.current = abort;
@@ -389,20 +440,47 @@ export default function CaseDetail() {
     setRunAnswer(null);
     setMode(selected);
     setStreamError("");
+    if (!resume) {
+      setLivePending(null);
+      setEvidenceSubmitted(false);
+    }
     try {
-      await streamCase(id, selected, abort.signal, (event) => {
-        setStreamEvents((previous) => [...(previous || []), event]);
-        if (event.event_type === "error")
-          setStreamError(
-            asText(event.payload.message) ||
-              asText(
-                event.payload.error,
-                "The investigation could not finish.",
-              ),
-          );
-        if (event.event_type === "done" && event.payload.answer)
-          setRunAnswer(event.payload.answer as Answer);
-      });
+      await streamCase(
+        id,
+        selected,
+        abort.signal,
+        (event) => {
+          setStreamEvents((previous) => [...(previous || []), event]);
+          if (event.event_type === "error")
+            setStreamError(
+              asText(event.payload.message) ||
+                asText(
+                  event.payload.error,
+                  "The investigation could not finish.",
+                ),
+            );
+          if (event.event_type === "done" && event.payload.answer)
+            setRunAnswer(event.payload.answer as Answer);
+          if (
+            event.event_type === "evidence_requested" &&
+            event.payload.source === "human"
+          )
+            setLivePending({
+              ...event.payload,
+              status: "pending",
+            } as unknown as PendingEvidence);
+          if (
+            event.event_type === "evidence_received" &&
+            event.payload.source === "human"
+          ) {
+            setLivePending(null);
+            setEvidenceSubmitted(true);
+          }
+          if (event.event_type === "done") setLivePending(null);
+        },
+        evidenceMode,
+        streamUrl,
+      );
       if (selected === "live") {
         void client.invalidateQueries({ queryKey: ["case", id] });
         void client.invalidateQueries({ queryKey: ["cases"] });
@@ -414,7 +492,52 @@ export default function CaseDetail() {
           error instanceof Error ? error.message : "Stream failed.",
         );
     } finally {
-      if (controller.current === abort) setMode(null);
+      if (controller.current === abort) {
+        controller.current = null;
+        setMode(null);
+      }
+    }
+  }
+  async function respond(responseType: EvidenceResponse, note: string) {
+    const request =
+      livePending === undefined ? query.data?.pending_evidence : livePending;
+    if (!request || evidenceSubmitting) return;
+    setEvidenceSubmitting(true);
+    setEvidenceError("");
+    try {
+      const result = await api<{ accepted: boolean; stream_url: string }>(
+        `/cases/${encodeURIComponent(id)}/evidence`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            request_id: request.request_id,
+            response_type: responseType,
+            note,
+          }),
+        },
+      );
+      // A fast continuation can publish evidence_received/done before the POST
+      // response arrives. Preserve its cleared state instead of restoring the panel.
+      setLivePending((current) =>
+        current === null
+          ? null
+          : {
+              ...(current || request),
+              status: "answered",
+            },
+      );
+      setEvidenceSubmitted(true);
+      if (!controller.current) void start("live", true, result.stream_url);
+      void client.invalidateQueries({ queryKey: ["case", id] });
+      void client.invalidateQueries({ queryKey: ["cases"] });
+    } catch (error) {
+      setEvidenceError(
+        error instanceof Error
+          ? error.message
+          : "Evidence could not be saved. Try again.",
+      );
+    } finally {
+      setEvidenceSubmitting(false);
     }
   }
   if (query.isPending) return <Skeleton rows={10} />;
@@ -426,6 +549,32 @@ export default function CaseDetail() {
   const answer = runAnswer || data.answer;
   const trigger = data.trigger;
   const events = streamEvents || data.timeline;
+  const pendingEvidence =
+    livePending === undefined ? data.pending_evidence : livePending;
+  const graphWarning =
+    events.map((event) => asText(event.payload.warning)).find(Boolean) ||
+    (events.some(
+      (event) =>
+        event.event_type === "case_written" &&
+        event.payload.written_to_graph === false,
+    )
+      ? "The graph was unavailable for this run. Results are retained locally; no graph write is claimed."
+      : "");
+  const awaitingFinal =
+    (mode === "live" && !runAnswer) || Boolean(pendingEvidence);
+  const initialActions =
+    (events.find((event) => event.event_type === "nba_initial")?.payload
+      .actions as Action[] | undefined) ||
+    (!awaitingFinal ? answer?.next_best_actions.initial : undefined);
+  const finalEvent = events
+    .filter((event) => event.event_type === "nba_final")
+    .at(-1)?.payload;
+  const finalActions = awaitingFinal
+    ? (finalEvent?.actions as Action[] | undefined)
+    : answer?.next_best_actions.final;
+  const whatChanged = awaitingFinal
+    ? asText(finalEvent?.what_changed)
+    : answer?.next_best_actions.what_changed;
   const assessments = events.filter(
     (event) => event.event_type === "assessment",
   );
@@ -445,19 +594,21 @@ export default function CaseDetail() {
         ? "Approved internally · external filing not executed"
         : "Filing recommendation rejected · not filed";
   const probability =
-    mode && last
+    (mode || pendingEvidence) && last
       ? Number(last.probability)
       : (caseData?.fraud_probability ?? 0);
   const verdict =
-    mode && last ? (last.verdict as Verdict) : caseData?.verdict || "uncertain";
+    (mode || pendingEvidence) && last
+      ? (last.verdict as Verdict)
+      : caseData?.verdict || "uncertain";
   const families = (
-    mode && last?.family_contributions
+    (mode || pendingEvidence) && last?.family_contributions
       ? last.family_contributions
       : data.family_contributions ||
         assessments.at(-1)?.payload.family_contributions ||
         {}
   ) as Record<string, number>;
-  const firstAssessment = data.timeline.find(
+  const firstAssessment = events.find(
     (event) => event.event_type === "assessment",
   )?.payload;
   const initial =
@@ -490,16 +641,34 @@ export default function CaseDetail() {
           <div className="case-title">
             <h1 className="mono">{id}</h1>
             {caseData && <VerdictChip verdict={caseData.verdict} />}
-            <span className="status-text">{human(data.status)}</span>
+            <span className="status-text">
+              {pendingEvidence ? "Awaiting evidence" : human(data.status)}
+            </span>
           </div>
           <p>
             {human(trigger.trigger_type)} · Opened {trigger.opened_at} UTC
           </p>
         </div>
         <div className="run-controls">
+          <label className="run-evidence-mode">
+            <span>Evidence responses</span>
+            <select
+              aria-label="Evidence responses"
+              value={evidenceMode}
+              disabled={!!mode || Boolean(pendingEvidence)}
+              onChange={(event) =>
+                setEvidenceMode(event.target.value as EvidenceMode)
+              }
+            >
+              <option value="simulated">Simulated</option>
+              <option value="human">Human</option>
+            </select>
+          </label>
           <button
             className="button"
-            disabled={!!mode || !data.timeline.length}
+            disabled={
+              !!mode || !data.timeline.length || Boolean(pendingEvidence)
+            }
             onClick={() => void start("replay")}
           >
             <Play size={15} aria-hidden />
@@ -508,10 +677,16 @@ export default function CaseDetail() {
           <button
             className="button primary"
             disabled={!!mode}
-            onClick={() => void start("live")}
+            onClick={() => void start("live", Boolean(pendingEvidence))}
           >
             <Radio size={15} aria-hidden />
-            {mode === "live" ? "Investigating…" : "Run live"}
+            {mode === "live"
+              ? pendingEvidence
+                ? "Awaiting evidence"
+                : "Investigating…"
+              : pendingEvidence
+                ? "Reconnect live"
+                : "Run live"}
           </button>
           {mode && (
             <button
@@ -520,6 +695,7 @@ export default function CaseDetail() {
               aria-label="Stop viewing stream"
               onClick={() => {
                 controller.current?.abort();
+                controller.current = null;
                 setMode(null);
               }}
             >
@@ -530,7 +706,9 @@ export default function CaseDetail() {
       </div>
       <div className="case-source">
         <span className="dot" />
-        {data.answer_source === "runtime"
+        {data.answer_source === "runtime" ||
+        data.answer_source === "live" ||
+        !data.answer
           ? "Runtime investigation · graded answers preserved"
           : "Saved benchmark answer"}
         <span>
@@ -540,6 +718,21 @@ export default function CaseDetail() {
         </span>
       </div>
       {streamError && <ErrorState error={new Error(streamError)} />}
+      {graphWarning && (
+        <div className="graph-warning" role="status">
+          <AlertTriangle size={17} aria-hidden />
+          <p>{graphWarning}</p>
+        </div>
+      )}
+      {pendingEvidence && (
+        <EvidencePanel
+          key={pendingEvidence.request_id}
+          request={pendingEvidence}
+          submitting={evidenceSubmitting}
+          error={evidenceError}
+          onRespond={(response, note) => void respond(response, note)}
+        />
+      )}
       <div className="detail-grid">
         <aside className="facts-column">
           <section className="panel">
@@ -586,7 +779,7 @@ export default function CaseDetail() {
               <p>{trigger.trigger_text}</p>
             </div>
           </section>
-          {caseData && (
+          {(caseData || last) && (
             <section className="panel">
               <Probability
                 probability={probability}
@@ -601,7 +794,11 @@ export default function CaseDetail() {
           <div className="panel-heading">
             <h2>Investigation timeline</h2>
             <span className={`stream-status ${mode ? "streaming" : ""}`}>
-              {mode ? "Streaming" : "Stored"}
+              {pendingEvidence
+                ? "Awaiting evidence"
+                : mode
+                  ? "Streaming"
+                  : "Stored"}
             </span>
           </div>
           <div className="timeline-caption">
@@ -652,36 +849,52 @@ export default function CaseDetail() {
           </footer>
         </section>
         <div className="decisions-column">
-          {answer ? (
-            <>
-              <section className="panel nba-panel">
-                <div className="panel-heading">
-                  <h2>Next best actions</h2>
-                  <ShieldCheck size={16} aria-hidden />
-                </div>
-                <div className="nba-grid">
-                  <ActionList
-                    title="Initial NBA"
-                    actions={answer.next_best_actions.initial}
-                  />
+          {initialActions && (
+            <section className="panel nba-panel">
+              <div className="panel-heading">
+                <h2>Next best actions</h2>
+                <ShieldCheck size={16} aria-hidden />
+              </div>
+              <div className="nba-grid">
+                <ActionList title="Initial NBA" actions={initialActions} />
+                {finalActions ? (
                   <ActionList
                     title="Final NBA"
-                    actions={answer.next_best_actions.final}
+                    actions={finalActions}
+                    reveal={evidenceSubmitted}
                   />
-                </div>
-                <div className="what-changed">
+                ) : (
+                  <section className="nba-column final-nba-pending">
+                    <h3>Final NBA</h3>
+                    <p className="helper">
+                      {pendingEvidence
+                        ? "Waiting for your evidence response before reassessment."
+                        : "The agent is reviewing the evidence."}
+                    </p>
+                  </section>
+                )}
+              </div>
+              {whatChanged && (
+                <div
+                  className={`what-changed ${evidenceSubmitted ? "evidence-changed" : ""}`}
+                  role={evidenceSubmitted ? "status" : undefined}
+                >
                   <strong>What changed</strong>
                   <p>
-                    {answer.next_best_actions.what_changed === "nothing"
+                    {whatChanged === "nothing"
                       ? "No additional evidence was needed. Initial recommendations remain supported."
-                      : answer.next_best_actions.what_changed}
+                      : whatChanged}
                   </p>
                 </div>
-                <p className="data-note">
-                  Expand an action to see its policy citations. L1 and L2
-                  actions await approval.
-                </p>
-              </section>
+              )}
+              <p className="data-note">
+                Expand an action to see its policy citations. L1 and L2 actions
+                await approval.
+              </p>
+            </section>
+          )}
+          {answer && !awaitingFinal ? (
+            <>
               <section className="panel requests-panel">
                 <div className="panel-heading">
                   <h2>Evidence requests</h2>
@@ -694,14 +907,24 @@ export default function CaseDetail() {
                     <details key={index} open>
                       <summary>
                         {human(request.type)}
-                        <span className="source-chip">Simulated</span>
+                        <span className="source-chip">
+                          {request.source === "human" ? "Human" : "Simulated"}
+                        </span>
                       </summary>
                       <p>{request.assumed_response}</p>
+                      {request.source === "human" && (
+                        <p className="helper">
+                          Answered by {human(request.answered_by)}
+                          {request.answered_at
+                            ? ` at ${request.answered_at}`
+                            : ""}
+                        </p>
+                      )}
                     </details>
                   ))
                 ) : (
                   <p className="data-note">
-                    No additional replies were simulated for this case.
+                    No additional evidence response was needed for this case.
                   </p>
                 )}
               </section>
@@ -735,16 +958,18 @@ export default function CaseDetail() {
                 </p>
               </section>
             </>
-          ) : (
+          ) : !initialActions ? (
             <section className="panel">
               <EmptyState title="Recommendations pending">
-                Run the investigation to assess the trigger and produce actions.
+                {mode
+                  ? "The agent is gathering evidence for its initial recommendation."
+                  : "Run the investigation to assess the trigger and produce actions."}
               </EmptyState>
             </section>
-          )}
+          ) : null}
         </div>
       </div>
-      {answer && (
+      {answer && !awaitingFinal && (
         <>
           <section className="case-summary">
             <div>

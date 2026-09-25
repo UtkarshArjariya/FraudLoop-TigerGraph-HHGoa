@@ -43,6 +43,7 @@ class Trigger(BaseModel):
     card_id: str | None = Field(None, pattern=r"^C\d+-K\d+$")
     text: str | None = Field(None, min_length=1, max_length=4000)
     note: str | None = Field(None, min_length=1, max_length=4000)
+    mode_evidence: Literal["simulated", "human"] = "simulated"
 
     @model_validator(mode="after")
     def required_fields(self):
@@ -64,6 +65,19 @@ class ApprovalDecision(BaseModel):
     note: str = Field("", max_length=2000)
 
 
+class EvidenceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(min_length=1, max_length=80, pattern=r"^[A-Za-z0-9_-]+$")
+    response_type: Literal["customer_confirms", "customer_denies", "stepup_passed", "stepup_failed", "analyst_note"]
+    note: str = Field("", max_length=4000)
+
+    @model_validator(mode="after")
+    def useful_note(self):
+        if self.response_type == "analyst_note" and not self.note.strip():
+            raise ValueError("An analyst note must contain text.")
+        return self
+
+
 def gemini_status(repo):
     registry = read_json(repo.data / "model_registry.json", {})
     generation = registry.get("gen", {})
@@ -78,12 +92,12 @@ def gemini_status(repo):
         "kind": value.get("kind", "unknown"), "reset_at": value.get("reset_at")}
         for model, value in quotas.items() if float(value.get("until", 0)) > now]
     blocked = {entry["model"] for entry in cooldowns}
-    enabled = os.getenv("FRAUDLOOP_ENABLE_LLM", "0") == "1"
+    enabled = os.getenv("FRAUDLOOP_ENABLE_LLM", "1") == "1"
     return {"status": "template" if not enabled else "cooldown" if models and all(model in blocked for model in models) else "not_live_checked",
         "models": models, "cooldowns": cooldowns, "live_checked": False, "enabled_for_live": enabled,
         "cached_at": generation.get("checked_at"), "attempt_budget": 60,
         "attempts_used": read_json(repo.data / "api_llm_budget.json", {}).get("attempts", 0),
-        "detail": "Cached model/quota state only; availability is not established by discovery. Live narration uses templates unless FRAUDLOOP_ENABLE_LLM=1."}
+        "detail": "Cached model/quota state only; availability is not established by discovery. Live narration uses the fallback chain unless FRAUDLOOP_ENABLE_LLM=0; exhausted models use guarded templates."}
 
 
 def create_app(root: Path | str | None = None):
@@ -99,13 +113,14 @@ def create_app(root: Path | str | None = None):
 
     @asynccontextmanager
     async def lifespan(app):
+        await manager.restore_pending()
         yield
         await manager.close()
 
     app = FastAPI(title="FRAUDLOOP", version="0.2.0", lifespan=lifespan,
         description="Local demo analyst API. X-Role is a demonstration permission switch, not authentication. Bank actions remain recommendations.")
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-        allow_credentials=False, allow_methods=["GET", "POST"], allow_headers=["Content-Type", "X-Role"])
+        allow_credentials=False, allow_methods=["GET", "POST", "PUT"], allow_headers=["Content-Type", "X-Role"])
     app.state.repository, app.state.gateway, app.state.manager = repo, gateway, manager
 
     @app.middleware("http")
@@ -147,7 +162,12 @@ def create_app(root: Path | str | None = None):
 
     @app.get("/api/cases")
     async def cases():
-        return {"cases": repo.queue(manager.active)}
+        rows = repo.queue(manager.active)
+        requests = manager.evidence.all()
+        for row in rows:
+            if requests.get(row["case_id"], {}).get("status") == "pending":
+                row["status"] = "awaiting_evidence"
+        return {"cases": rows}
 
     @app.get("/api/cases/{case_id}")
     async def case_detail(case_id: str):
@@ -155,9 +175,12 @@ def create_app(root: Path | str | None = None):
         run = manager.runs.get(case_id)
         answer = repo.answer(case_id)
         trace = repo.trace(case_id)
-        return {"answer": answer, "timeline": run.events if run and not run.finished else repo.timeline(case_id), "trigger": trigger,
-            "status": "running" if case_id in manager.active else answer.get("case", {}).get("status", "queued") if answer else "queued",
-            "run_id": run.run_id if run else None,
+        pending = manager.evidence.public(case_id)
+        progress = read_json(repo.live_timelines / f"{case_id}.json", {}) if pending else {}
+        return {"answer": answer, "timeline": run.events if run and not run.finished else progress.get("events", repo.timeline(case_id)), "trigger": trigger,
+            "status": "awaiting_evidence" if pending and pending["status"] == "pending" else "running" if case_id in manager.active else answer.get("case", {}).get("status", "queued") if answer else "queued",
+            "run_id": run.run_id if run else pending.get("run_id") if pending else None,
+            "pending_evidence": pending,
             "family_contributions": trace.get("final_families", {}), "initial_family_contributions": trace.get("initial_families", {}),
             "initial_probability": trace.get("initial_probability"),
             "answer_source": "runtime" if (repo.runtime / f"{case_id}.json").exists() else "graded" if answer else "pending"}
@@ -166,19 +189,38 @@ def create_app(root: Path | str | None = None):
     async def timeline(case_id: str):
         require_case(case_id)
         run = manager.runs.get(case_id)
-        return {"case_id": case_id, "events": run.events if run and not run.finished else repo.timeline(case_id)}
+        pending = manager.evidence.public(case_id)
+        progress = read_json(repo.live_timelines / f"{case_id}.json", {}) if pending else {}
+        return {"case_id": case_id, "events": run.events if run and not run.finished else progress.get("events", repo.timeline(case_id))}
 
     @app.post("/api/cases/{case_id}/investigate")
-    async def investigate(case_id: str, mode: Literal["live", "replay"] = Query("replay")):
+    async def investigate(case_id: str, mode: Literal["live", "replay"] = Query("replay"),
+                          mode_evidence: Literal["simulated", "human"] | None = Query(None),
+                          run_id: str | None = Query(None, max_length=80)):
         require_case(case_id)
         try:
-            run = await manager.start(case_id, mode)
+            run = await manager.start(case_id, mode, mode_evidence, run_id=run_id)
         except FileNotFoundError as exc:
             raise HTTPException(409, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         return StreamingResponse(manager.stream(run), media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "X-Run-ID": run.run_id})
+
+    @app.post("/api/cases/{case_id}/evidence")
+    async def submit_evidence(case_id: str, body: EvidenceResponse,
+                              role: Annotated[str, Header(alias="X-Role")] = "viewer"):
+        require_case(case_id)
+        if role not in {"analyst_l1", "supervisor_l2"}:
+            raise HTTPException(403, "Human evidence requires analyst_l1 or supervisor_l2.")
+        try:
+            record = await manager.submit_evidence(case_id, body.request_id, body.response_type, body.note, role)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"accepted": True, "case_id": case_id, "run_id": record["run_id"],
+                "stream_url": f"/api/cases/{case_id}/investigate?mode=live&run_id={record['run_id']}",
+                "response": record["response"],
+                "identity_disclosure": "answered_by records the selected local demo role; it is not authenticated identity."}
 
     @app.post("/api/investigations", status_code=201)
     async def new_investigation(body: Trigger):
@@ -192,7 +234,7 @@ def create_app(root: Path | str | None = None):
             atomic_json(repo.triggers_path, triggers)
         # Creation persists the trigger. The returned POST stream starts the
         # expensive job, giving the UI a case page before streaming begins.
-        return {"case_id": trigger["case_id"], "stream_url": f"/api/cases/{trigger['case_id']}/investigate?mode=live",
+        return {"case_id": trigger["case_id"], "stream_url": f"/api/cases/{trigger['case_id']}/investigate?mode=live&mode_evidence={trigger['mode_evidence']}",
             "stream_method": "POST", "mode": "live", "status": "queued", "trigger": trigger}
 
     @app.get("/api/cases/{case_id}/graph")

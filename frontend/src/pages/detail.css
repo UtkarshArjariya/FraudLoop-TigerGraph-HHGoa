@@ -35,6 +35,145 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+}
+.run-evidence-mode {
+  display: grid;
+  gap: 3px;
+  margin-right: 4px;
+}
+.run-evidence-mode > span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.run-evidence-mode select {
+  font-size: 12px;
+  min-height: 32px;
+  padding-block: 5px;
+}
+.human-evidence-panel {
+  margin-bottom: 20px;
+  border-color: var(--amber);
+}
+.graph-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  color: var(--amber);
+  background: var(--amber-bg);
+  border: 1px solid var(--amber);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.graph-warning svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.human-evidence-panel .panel-heading {
+  background: var(--amber-bg);
+  border-radius: 7px 7px 0 0;
+}
+.human-evidence-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.human-evidence-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(290px, 1fr);
+  gap: 28px;
+  padding: 20px;
+}
+.request-context > p {
+  margin-top: 8px;
+  max-width: 75ch;
+}
+.precedent-basis {
+  margin: 16px 0;
+  display: grid;
+  gap: 8px;
+}
+.precedent-basis > strong {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.precedent-basis .provenance-chips {
+  margin: 0;
+}
+.response-controls {
+  display: grid;
+  gap: 9px;
+  align-content: start;
+}
+.response-controls > label {
+  font-size: 12px;
+}
+.response-controls textarea {
+  width: 100%;
+  resize: vertical;
+}
+.response-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.response-buttons .button {
+  white-space: normal;
+}
+.note-response {
+  justify-self: start;
+}
+.final-nba-pending {
+  background: var(--bg);
+}
+.what-changed.evidence-changed {
+  border-left: 3px solid var(--accent);
+  background: var(--surface-hover);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .final-nba-reveal {
+    animation: final-nba-arrive 380ms ease-out;
+  }
+  .what-changed.evidence-changed {
+    animation: changed-evidence 900ms ease-out;
+  }
+  @keyframes final-nba-arrive {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes changed-evidence {
+    from {
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    to {
+      box-shadow: inset 0 0 0 1px transparent;
+    }
+  }
+}
+@media (max-width: 700px) {
+  .human-evidence-body {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 16px;
+  }
+  .human-evidence-panel .panel-heading {
+    flex-wrap: wrap;
+  }
+  .run-controls {
+    width: 100%;
+  }
+  .run-evidence-mode {
+    margin-right: auto;
+  }
 }
 .case-source {
   font-size: 12px;

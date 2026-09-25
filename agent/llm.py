@@ -103,11 +103,15 @@ def validate_draft(draft: NarrativeDraft, brief: dict, fallback: dict[str, str],
         raise NarrativeRejected("change_description_length")
     if not words["stop_reason"].strip():
         raise NarrativeRejected("missing_stop_reason")
-    if brief.get("requests"):
+    if any(request.get("source", "simulated") == "simulated" for request in brief.get("requests", [])):
         required = ["summary", "what_changed"] + \
             (["sar_narrative"] if report_required else [])
         if any("simulat" not in words[field].lower() for field in required if words[field] != "nothing"):
             raise NarrativeRejected("missing_simulation_disclosure")
+    if any(request.get("source") == "human" for request in brief.get("requests", [])):
+        required = ["summary", "what_changed"] + (["sar_narrative"] if report_required else [])
+        if any("human" not in words[field].lower() for field in required if words[field] != "nothing"):
+            raise NarrativeRejected("missing_human_evidence_disclosure")
     # A prose editor cannot change an explicit verdict or introduce new actions.
     verdict = str(brief.get("verdict", ""))
     stated_verdicts = re.findall(
@@ -155,6 +159,8 @@ Rules:
    undocumented; then use 2-3 sentences. If the fallback what_changed is "nothing", keep it exactly.
 10. Describe bank actions as recommendations. When requests contains simulated replies,
     explicitly call them simulated in summary, what_changed (unless "nothing"), and any SAR.
+    When requests contains human evidence, explicitly call it human-recorded in those fields.
+    An analyst records evidence in a local demo role; do not imply authenticated customer contact.
 11. List every entity ID mentioned in the text in cited_entity_ids, using only allowed_entity_ids.
 
 Return only JSON matching the provided schema:

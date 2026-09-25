@@ -35,3 +35,7 @@ data/runtime_triggers.json
 data/api_llm_budget.json
 data/api_llm_budget.lock
 .playwright/
+cases_live/
+data/timelines_live/
+data/pending_evidence.json
+data/pending_evidence.lock

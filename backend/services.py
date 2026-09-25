@@ -5,6 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 import fcntl
+import inspect
 import json
 import logging
 import os
@@ -13,6 +14,7 @@ import time
 import uuid
 
 from backend.data import Repository, atomic_json, epoch, graph_elements, read_json, utc_now
+from backend.evidence import PendingEvidence
 
 logger = logging.getLogger("fraudloop.api")
 
@@ -233,7 +235,7 @@ class GuardedGraph:
 
 
 def budgeted_narrator(repo):
-    if os.getenv("FRAUDLOOP_ENABLE_LLM", "0") != "1":
+    if os.getenv("FRAUDLOOP_ENABLE_LLM", "1") != "1":
         return None
     from agent.llm import Narrator
 
@@ -299,7 +301,8 @@ def prepare_runtime_store(repo, store, case_id):
             "answer": answer, "answer_json": json.dumps(answer), "written_to_graph": False}
 
 
-async def investigate_live(repo, gateway, case_id, emit):
+async def investigate_live(repo, gateway, case_id, emit, *, mode_evidence="simulated", resume_state=None,
+                           evidence_response=None):
     # Heavy objects are created only for an explicit live run and only while the
     # gateway lock is held. Reads/replay never load this 89 MB prepared store.
     from agent.answer import Answer, validate_answer
@@ -321,10 +324,19 @@ async def investigate_live(repo, gateway, case_id, emit):
             local = True
         try:
             wrapped = GuardedGraph(graph, gateway, store)
+            def validate_candidate(answer, trace):
+                problems = validate_answer(answer, store, trace)
+                if problems:
+                    raise ValueError("Runtime answer failed validation before write: " + "; ".join(problems))
             emit("step_started", {"state": "RUNTIME", "mode": "live", "backend": "local" if local else "tigergraph-mcp",
-                "narration": "gemini" if os.getenv("FRAUDLOOP_ENABLE_LLM") == "1" else "template",
-                "disclosure": "Bank actions are recommendations; additional replies are deterministic simulations."})
-            answer, trace = await investigate(trigger, wrapped, narrator=budgeted_narrator(repo), emit=emit)
+                "narration": "gemini_fallback_chain" if os.getenv("FRAUDLOOP_ENABLE_LLM", "1") == "1" else "template",
+                "mode_evidence": mode_evidence,
+                "disclosure": "Bank actions are recommendations; evidence responses are " +
+                    ("recorded by a human demo analyst." if mode_evidence == "human" else "deterministic simulations."),
+                "warning": "Graph unavailable; investigation is using local data and will not claim a graph write." if local else None})
+            answer, trace = await investigate(trigger, wrapped, narrator=budgeted_narrator(repo), emit=emit,
+                live=True, mode_evidence=mode_evidence, resume_state=resume_state, evidence_response=evidence_response,
+                validate_before_write=validate_candidate)
             if wrapped.fallback is not None:
                 trace["backend"] = "local_after_graph_unavailable"
                 trace.setdefault("warnings", []).append("GSE became unavailable; remaining operations used the in-memory local fallback.")
@@ -346,6 +358,8 @@ class Run:
     subscribers: set = field(default_factory=set)
     finished: bool = False
     task: asyncio.Task | None = None
+    mode_evidence: str = "simulated"
+    paused: bool = False
 
     def publish(self, event):
         self.events.append(event)
@@ -359,15 +373,49 @@ class InvestigationManager:
         self.runs = {}
         self.start_lock = asyncio.Lock()
         self.live_runner = investigate_live
+        self.evidence = PendingEvidence(repo)
         self.replay_delay = float(os.getenv("FRAUDLOOP_REPLAY_DELAY", "0.12"))
 
     @property
     def active(self):
         return {cid for cid, run in self.runs.items() if not run.finished}
 
-    async def start(self, case_id, mode):
+    async def restore_pending(self):
+        for case_id, record in self.evidence.all().items():
+            if record.get("status") != "completed" and case_id in self.repo.triggers():
+                if self.reconcile_completed(case_id, record):
+                    continue
+                await self.start(case_id, "live", "human")
+
+    def reconcile_completed(self, case_id, record):
+        saved = read_json(self.repo.runtime / f"{case_id}.json", {})
+        if (saved.get("run_id") == record.get("run_id") and isinstance(saved.get("answer"), dict)
+                and saved.get("timeline") and saved["timeline"][-1].get("event_type") == "done"):
+            self.evidence.complete(case_id, record["run_id"])
+            return saved
+        return None
+
+    async def submit_evidence(self, case_id, request_id, response_type, note, answered_by):
+        record = self.evidence.submit(case_id, request_id, response_type, note, answered_by)
+        if self.reconcile_completed(case_id, record):
+            return self.evidence.get(case_id)
+        run = self.runs.get(case_id)
+        if record.get("status") != "completed" and (not run or run.finished):
+            await self.start(case_id, "live", "human")
+        return record
+
+    async def start(self, case_id, mode, mode_evidence=None, *, run_id=None):
         async with self.start_lock:
             previous = self.runs.get(case_id)
+            if run_id:
+                if previous and previous.run_id == run_id:
+                    return previous
+                saved = read_json(self.repo.runtime / f"{case_id}.json", {})
+                if saved.get("run_id") == run_id:
+                    return Run(case_id, mode, run_id=run_id, events=saved.get("timeline", []), finished=True)
+                pending = self.evidence.get(case_id)
+                if not pending or pending.get("run_id") != run_id or pending.get("status") == "completed":
+                    raise ValueError("The requested run is not available.")
             if previous and not previous.finished:
                 if previous.mode != mode:
                     raise ValueError("This case already has an active investigation in another mode.")
@@ -376,7 +424,27 @@ class InvestigationManager:
                 raise FileNotFoundError("No recorded timeline is available; run a live investigation first.")
             if mode == "live" and any(not run.finished and run.mode == "live" for run in self.runs.values()):
                 raise ValueError("Another live investigation is running. Wait for it to finish.")
-            run = Run(case_id, mode)
+            pending = self.evidence.get(case_id) if mode == "live" else None
+            if pending and pending.get("status") != "completed":
+                saved = self.reconcile_completed(case_id, pending)
+                if saved:
+                    run = Run(case_id, mode, run_id=pending["run_id"], events=saved["timeline"], finished=True,
+                              mode_evidence="human")
+                    self.runs[case_id] = run
+                    return run
+            if pending and pending.get("status") != "completed":
+                progress = read_json(self.repo.live_timelines / f"{case_id}.json", {})
+                events = progress.get("events", []) if progress.get("run_id") == pending["run_id"] else []
+                # Failed attempts remain in their diagnostic file. Reconnecting
+                # to a recoverable continuation must not terminate on that old error.
+                events = [event for event in events if event.get("event_type") != "error"]
+                run = Run(case_id, mode, run_id=pending["run_id"], events=events,
+                          mode_evidence="human", paused=pending.get("status") == "pending")
+            else:
+                selected = mode_evidence or self.repo.triggers().get(case_id, {}).get("mode_evidence", "simulated")
+                if selected not in {"human", "simulated"}:
+                    raise ValueError("Unknown evidence mode.")
+                run = Run(case_id, mode, mode_evidence=selected)
             self.runs[case_id] = run
             run.task = asyncio.create_task(self.execute(run))
             return run
@@ -394,13 +462,37 @@ class InvestigationManager:
             run.publish({"event_type": event_type, "case_id": run.case_id, "sequence": len(run.events),
                 "timestamp": utc_now(), "elapsed_ms": round((time.perf_counter() - started) * 1000),
                 "payload": payload, "source": "live", "run_id": run.run_id})
+            atomic_json(self.repo.live_timelines / f"{run.case_id}.json",
+                {"run_id": run.run_id, "status": "awaiting_evidence" if run.paused else "running", "events": run.events})
         try:
             if run.mode == "replay":
                 for event in self.repo.timeline(run.case_id):
                     await asyncio.sleep(self.replay_delay if event.get("event_type") != "tool_call" else self.replay_delay * 1.6)
                     run.publish({**event, "run_id": run.run_id, "mode": "replay"})
             else:
-                result = await self.live_runner(self.repo, self.gateway, run.case_id, emit)
+                from agent.investigate import EvidencePaused
+                while True:
+                    pending = self.evidence.get(run.case_id)
+                    pending = pending if pending and pending.get("run_id") == run.run_id and pending.get("status") != "completed" else None
+                    if pending and not pending.get("response"):
+                        run.paused = True
+                        pending = await self.evidence.wait(run.case_id, pending["request_id"])
+                    run.paused = False
+                    options = {"mode_evidence": run.mode_evidence,
+                               "resume_state": pending.get("snapshot") if pending else None,
+                               "evidence_response": pending.get("response") if pending else None}
+                    # Preserve the four-argument runner seam used by demo tests
+                    # and integrations; production receives every option.
+                    parameters = inspect.signature(self.live_runner).parameters
+                    if not any(p.kind == p.VAR_KEYWORD for p in parameters.values()):
+                        options = {key: value for key, value in options.items() if key in parameters}
+                    try:
+                        result = await self.live_runner(self.repo, self.gateway, run.case_id, emit, **options)
+                        break
+                    except EvidencePaused as pause:
+                        record = self.evidence.create(run.case_id, run.run_id, pause.snapshot, pause.request)
+                        run.paused = True
+                        emit("evidence_requested", {key: value for key, value in record.items() if key != "snapshot"})
                 answer = result.answer if isinstance(result, InvestigationResult) else result
                 trace = result.trace if isinstance(result, InvestigationResult) else {}
                 completion = {"event_type": "done", "case_id": run.case_id, "sequence": len(run.events),
@@ -411,6 +503,9 @@ class InvestigationManager:
                 # replay together. Failed attempts never replace this file.
                 atomic_json(self.repo.runtime / f"{run.case_id}.json", {"answer": answer,
                     "trace": trace, "timeline": [*run.events, completion], "run_id": run.run_id})
+                atomic_json(self.repo.live_timelines / f"{run.case_id}.json",
+                    {"run_id": run.run_id, "status": "completed", "events": [*run.events, completion], "trace": trace})
+                self.evidence.complete(run.case_id, run.run_id)
                 run.publish(completion)
             if not run.events or run.events[-1].get("event_type") not in {"done", "error"}:
                 run.publish({"event_type": "done", "case_id": run.case_id, "sequence": len(run.events),

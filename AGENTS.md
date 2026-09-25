@@ -206,3 +206,23 @@ Cache: `data/embeddings/gemini-embedding-001-768.json`. Model: `gemini-embedding
 - Final verification: 212 Python tests passed in 4.88s, all 20 answers validate, frontend build/TypeScript/pip/diff checks pass. Four real isolated local investigations included new CASE IDs and earlier-runtime retrieval; zero LLM calls and zero live graph writes. Read-only MCP health/get_node/neighborhood worked. Browser replay/roles/theme/focus/responsive checks passed with no console errors. Structured API logs emit JSON once per request and omit request contents.
 - Seven screenshots and blog/video/social drafts are committed in docs. `docs/MORNING_REPORT.md` and `docs/overnight-log.md` are the delivery handoff. All assistant-started demo servers were stopped.
 - No Git remote was configured. Three milestone pushes failed with `fatal: No configured push destination.` Work is committed locally; configure the intended destination before pushing overnight-build. Never force-push, merge to main, or modify the safe tag to finish this delivery.
+
+## Live upgrade in progress (2026-09-25)
+
+- The user requested `upgrade-live` from `main`, with human evidence first, then
+  GraphRAG controls and a bounded detection stream. Do not merge this branch.
+- The new guardrail forbids edits to `cases/*.json` and `data/timelines/`.
+  API outputs now use `cases_live/` and `data/timelines_live/`; older runtime
+  snapshots remain readable. No TigerGraph schema changes are authorized.
+- Human evidence persists continuations in `data/pending_evidence.json` and
+  releases the graph session while waiting. L1/L2 responses resume the saved
+  assessment; source, selected demo role and timestamp are recorded. The role
+  header is still not authenticated bank identity. Raw notes are attributed
+  input, not verified facts. Live answers validate before graph write-back.
+- Live narration defaults to the existing Gemini fallback chain; set
+  `FRAUDLOOP_ENABLE_LLM=0` for template-only demos. New live summary embeddings
+  use only BGE/`emb_bge`. Existing keys, indexes and checkpoints are preserved.
+- Feature 1 verification: 225 tests, all 20 saved answer validations, build,
+  TypeScript and diff checks passed. Real Chrome local human-denial workflow
+  passed with BLOCK_CARD/L1 and CREATE_CASE/auto, graph=false, including reload.
+- Progress and subsequent verification are recorded in `docs/upgrade-log.md`.

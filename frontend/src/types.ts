@@ -1,5 +1,27 @@
 export type Role = "viewer" | "analyst_l1" | "supervisor_l2";
 export type Verdict = "fraud" | "legitimate" | "uncertain";
+export type EvidenceMode = "simulated" | "human";
+export type EvidenceResponse =
+  | "customer_confirms"
+  | "customer_denies"
+  | "stepup_passed"
+  | "stepup_failed"
+  | "analyst_note";
+export interface PendingEvidence {
+  request_id: string;
+  type: string;
+  reason: string;
+  precedent_ids: string[];
+  precedents?: {
+    case_id: string;
+    explanation?: string;
+    analyst_notes?: string;
+  }[];
+  source: "human";
+  status: "pending" | "answered";
+  requested_at: string;
+  run_id?: string;
+}
 export interface Action {
   action: string;
   route: "auto" | "L1" | "L2";
@@ -35,6 +57,11 @@ export interface Answer {
     type: string;
     asked_after_step: number;
     assumed_response: string;
+    source?: EvidenceMode;
+    answered_by?: string;
+    answered_at?: string;
+    request_id?: string;
+    response_type?: EvidenceResponse;
   }[];
   next_best_actions: {
     initial: Action[];
@@ -53,7 +80,11 @@ export interface Answer {
   tool_calls: number;
   tokens: number;
   latency_s: number;
-  metadata?: { llm_model_used?: string; llm_attempts?: number };
+  metadata?: {
+    llm_model_used?: string;
+    llm_attempts?: number;
+    mode_evidence?: EvidenceMode;
+  };
 }
 export interface QueueCase {
   case_id: string;
@@ -86,6 +117,7 @@ export interface Trigger {
   card_id: string;
   customer_id: string;
   risk_score?: string;
+  mode_evidence?: EvidenceMode;
 }
 export interface CaseDetail {
   answer: Answer | null;
@@ -97,6 +129,7 @@ export interface CaseDetail {
   initial_family_contributions?: Record<string, number>;
   initial_probability?: number;
   answer_source?: string;
+  pending_evidence?: PendingEvidence | null;
 }
 export interface VectorIndex {
   id: string;

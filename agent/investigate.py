@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from dataclasses import asdict
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import time
@@ -21,6 +22,27 @@ from agent.policy import PolicyContext, recommend, stopping_reason
 
 STATES = ("TRIGGER", "GATHER", "ASSESS", "INITIAL_NBA", "REQUEST_EVIDENCE",
           "REASSESS", "FINAL_NBA", "SAR", "WRITE_BACK", "ANSWER")
+
+
+class EvidencePaused(Exception):
+    """A serializable continuation; callers must persist it before advertising a pause."""
+
+    def __init__(self, snapshot: dict, request: dict):
+        super().__init__("Human evidence is required before reassessment.")
+        self.snapshot, self.request = snapshot, request
+
+
+def human_response(value: dict) -> tuple[str, str]:
+    responses = {"customer_confirms": ("confirmed", "The analyst recorded that the customer confirms authorization."),
+                 "customer_denies": ("denied", "The analyst recorded that the customer denies authorization."),
+                 "stepup_passed": ("confirmed", "The analyst recorded successful step-up authentication."),
+                 "stepup_failed": ("failed", "The analyst recorded failed step-up authentication; failure alone is not a denial."),
+                 "analyst_note": ("inconclusive", "An analyst supplied a note; free text alone does not establish authorization.")}
+    response, text = responses[value["response_type"]]
+    attribution = f"HUMAN evidence recorded by {value['answered_by']} at {value['answered_at']}. "
+    # The raw analyst note remains attributed request data. It is not promoted
+    # into an established evidence claim or interpreted for policy decisions.
+    return response, attribution + text
 
 
 def context(result: Assessment, case: dict, request_type: str = "") -> PolicyContext:
@@ -46,17 +68,20 @@ def templates(case: dict, result: Assessment, initial: Assessment, requests: lis
               final_actions: list[dict], stop: str) -> dict[str, str]:
     ids = [row["txn_id"] for row in result.episode]
     pattern = result.pattern.replace("_", " ") if result.pattern != "none" else "no established fraud typology"
-    response = ("A simulated verification response is documented below." if requests else
+    human = bool(requests and requests[0].get("source") == "human")
+    source_label = "human-recorded" if human else "explicitly simulated"
+    response = (("A human-recorded verification response is documented below." if human else
+                 "A simulated verification response is documented below.") if requests else
                 "The case-pack customer denial is observed input." if case["trigger_type"] == "customer_report" else
                 "No customer response was assumed.")
     summary = (f"{case['card_id']} was assessed as {result.verdict} with fraud probability {result.probability:.3f}, with {pattern}. "
                f"The identified suspicious exposure is ${result.exposure:.2f}; {len(result.precedents)} closed precedents were retrieved. "
                f"{response} Recommendations follow the cited policy and any L1/L2 action awaits human approval.")
     changed = "nothing" if not requests else (
-        f"The explicitly simulated {requests[0]['type']} response changed probability from {initial.probability:.3f} to {result.probability:.3f} "
+        f"The {source_label} {requests[0]['type']} response changed probability from {initial.probability:.3f} to {result.probability:.3f} "
         f"and the verdict from {initial.verdict} to {result.verdict}; final recommendations reflect that response.")
     if requests and initial.probability == result.probability and initial.verdict == result.verdict:
-        changed = "The explicitly simulated response provided no decisive authorization evidence. The final recommendation retains the unresolved verdict and the policy-required monitoring or escalation."
+        changed = f"The {source_label} response provided no decisive authorization evidence. The final recommendation retains the unresolved verdict and the policy-required monitoring or escalation."
     narrative = ""
     if any(action["action"] == "FILE_REPORT" for action in final_actions):
         rows = result.episode
@@ -82,12 +107,19 @@ def templates(case: dict, result: Assessment, initial: Assessment, requests: lis
 
 
 async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | None = None,
-                      emit: EventCallback | None = None) -> tuple[dict, dict]:
+                      emit: EventCallback | None = None, live: bool = False,
+                      mode_evidence: str = "simulated", resume_state: dict | None = None,
+                      evidence_response: dict | None = None,
+                      validate_before_write: Callable | None = None) -> tuple[dict, dict]:
     """Run the existing policy flow with an optional nonfatal synchronous observer."""
     observer = safe_emitter(emit)
     observed_graph = ObservedGraph(graph, observer) if emit is not None else graph
     try:
-        return await _investigate(case, observed_graph, narrator=narrator, emit=observer)
+        return await _investigate(case, observed_graph, narrator=narrator, emit=observer, live=live,
+                                  mode_evidence=mode_evidence, resume_state=resume_state,
+                                  evidence_response=evidence_response, validate_before_write=validate_before_write)
+    except EvidencePaused:
+        raise
     except Exception as exc:
         observer("error", {"case_id": case.get("case_id", ""), "error_type": type(exc).__name__,
                            "message": "Investigation failed; no completed answer is available from this run."})
@@ -95,10 +127,14 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
 
 
 async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | None,
-                       emit: EventCallback) -> tuple[dict, dict]:
-    started = time.perf_counter()
-    call_start = graph.tool_calls
-    trace = {"case_id": case["case_id"], "backend": "local" if graph.use_local else "tigergraph-mcp",
+                       emit: EventCallback, live: bool = False, mode_evidence: str = "simulated",
+                       resume_state: dict | None = None, evidence_response: dict | None = None,
+                       validate_before_write: Callable | None = None) -> tuple[dict, dict]:
+    if mode_evidence not in {"simulated", "human"}:
+        raise ValueError("Unknown evidence mode.")
+    started = time.perf_counter() - (resume_state or {}).get("elapsed_s", 0)
+    call_start = graph.tool_calls - (resume_state or {}).get("tool_calls", 0)
+    trace = (resume_state or {}).get("trace") or {"case_id": case["case_id"], "backend": "local" if graph.use_local else "tigergraph-mcp",
              "states": [], "input_tokens": 0, "output_tokens": 0, "llm_latency_s": 0.0, "warnings": []}
 
     def state(name: str):
@@ -109,85 +145,112 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
                                   ("case_id", "opened_at", "trigger_type", "trigger_text", "flagged_txn_id", "card_id", "customer_id")}
         emit("step_started", payload)
 
-    state("TRIGGER")
-    as_of = int(pd.Timestamp(case["opened_at"], tz="UTC").timestamp())
-    state("GATHER")
-    window_result = await graph.call("card_window", {"card_id": case["card_id"], "as_of": as_of, "hours": 24*30})
-    window = window_result.get("transactions", [])
-    matches = [row for row in window if str(row["txn_id"]) == str(case["flagged_txn_id"])]
-    if len(matches) != 1:
-        raise GraphError(f"Flagged transaction missing or duplicated for {case['case_id']}")
-    flag = matches[0]
-    baseline = await graph.call("card_baseline", {"card_id": case["card_id"], "as_of": int(flag["epoch"]), "days": 183})
-    profile = flag.get("device_profile", "")
-    ring = {"transactions": [], "cases": []}
-    if profile:
-        ring = await graph.call("device_ring", {"device_id": profile, "as_of": as_of,
-                                "days": 30 if case["trigger_type"] == "analyst_request" else 7})
-    region = {"transactions": []}
-    if flag.get("region"):
-        region = await graph.call("region_cluster", {"region_id": flag["region"], "as_of": as_of, "days": 7})
-    prior = await graph.call("prior_cases", {"card_id": case["card_id"], "device_id": profile,
-                             "region_id": flag.get("region", ""), "as_of": as_of})
-    library = await graph.call("case_library", {"as_of": as_of})
-    docs_result = await graph.call("get_documents", {})
-    documents = docs_result.get("documents", [])
-    query_text = f"{case['trigger_type']}: {case['trigger_text']} Device {profile}; channel {flag['channel']}; product {flag['product']}."
-    vector_rankings, documents = await retrieve_indexes(graph, query_text, as_of, library, documents, trace)
-    paths = graph_paths(prior)
-    state("ASSESS")
-    initial = assess(case, flag, window, baseline.get("transactions", []), ring.get("transactions", []),
-                     library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths)
-    earliest = min(int(row["epoch"]) for row in initial.episode)
-    if earliest < int(flag["epoch"]) - 48*3600:
-        # A graph-expanded episode may start before the flagged-card window.
-        # Recompute its reference history without any identified episode rows.
-        clean_baseline = [row for row in baseline.get("transactions", []) if int(row["epoch"]) < earliest]
-        initial = assess(case, flag, window, clean_baseline, ring.get("transactions", []),
+    if resume_state is None:
+        state("TRIGGER")
+        as_of = int(pd.Timestamp(case["opened_at"], tz="UTC").timestamp())
+        state("GATHER")
+        window_result = await graph.call("card_window", {"card_id": case["card_id"], "as_of": as_of, "hours": 24*30})
+        window = window_result.get("transactions", [])
+        matches = [row for row in window if str(row["txn_id"]) == str(case["flagged_txn_id"])]
+        if len(matches) != 1:
+            raise GraphError(f"Flagged transaction missing or duplicated for {case['case_id']}")
+        flag = matches[0]
+        baseline = await graph.call("card_baseline", {"card_id": case["card_id"], "as_of": int(flag["epoch"]), "days": 183})
+        profile = flag.get("device_profile", "")
+        ring = {"transactions": [], "cases": []}
+        if profile:
+            ring = await graph.call("device_ring", {"device_id": profile, "as_of": as_of,
+                                    "days": 30 if case["trigger_type"] == "analyst_request" else 7})
+        region = {"transactions": []}
+        if flag.get("region"):
+            region = await graph.call("region_cluster", {"region_id": flag["region"], "as_of": as_of, "days": 7})
+        prior = await graph.call("prior_cases", {"card_id": case["card_id"], "device_id": profile,
+                                 "region_id": flag.get("region", ""), "as_of": as_of})
+        library = await graph.call("case_library", {"as_of": as_of})
+        docs_result = await graph.call("get_documents", {})
+        documents = docs_result.get("documents", [])
+        query_text = f"{case['trigger_type']}: {case['trigger_text']} Device {profile}; channel {flag['channel']}; product {flag['product']}."
+        vector_rankings, documents = await retrieve_indexes(graph, query_text, as_of, library, documents, trace)
+        paths = graph_paths(prior)
+        state("ASSESS")
+        initial = assess(case, flag, window, baseline.get("transactions", []), ring.get("transactions", []),
                          library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths)
-    earlier_memory = library.get("memory", [])
-    if earlier_memory:
-        initial.evidence.append(evidence(
-            f"Retrieved {len(earlier_memory)} earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
-            "graph", "query:case_library", [row["case_id"] for row in earlier_memory]))
-    if not documents:
-        trace["warnings"].append("No graph policy documents were returned; using the versioned dataset policy encoded in code.")
-    if documents:
-        initial.evidence.append(evidence(
-            "Retrieved policy chunks: " + "; ".join(f"{doc['doc_id']} ({doc.get('match_label', 'policy text')}; RRF={doc.get('fused_score', 0):.6f})" for doc in documents[:12]),
-            "document", "retrieval:policy_chunks", []))
-    trace["retrieved_document_ids"] = [doc.get("doc_id", "") for doc in documents]
-    trace["retrieval_methods"] = {row["case_id"]: row["retrieval_method"] for row in initial.precedents}
-    trace["precedent_retrieval"] = [{k: row[k] for k in ("case_id", "fused_score", "provenance") if k in row} for row in initial.precedents]
-    trace["retrieved_memory_ids"] = [row["case_id"] for row in earlier_memory]
-    trace["initial_families"] = initial.families
-    trace["initial_probability"] = initial.probability
-    trace["candidate_exposure_usd"] = round(sum(abs(float(row["amount"])) for row in initial.episode), 2)
-    for item in initial.evidence:
-        emit("evidence_added", {"phase": "initial", **item})
-    emit("assessment", {"phase": "initial", "probability": initial.probability,
-                        "verdict": initial.verdict, "family_contributions": initial.families,
-                        "pattern": initial.pattern, "exposure_usd": initial.exposure})
-    stop = stopping_reason(context(initial, case), verified=(initial.response == "denied" and not initial.features["recurring_match"]))
-    if initial.response == "denied" and not initial.features["recurring_match"]:
-        stop = "R2 and section 6: the customer denial already recorded in the case pack settles the authorization question for this recommendation. No additional customer contact was performed."
-    request_type = "" if stop else choose_request(initial)
-    state("INITIAL_NBA")
-    initial_actions = recommend(context(initial, case, request_type))
-    trace["initial_policy_context"] = asdict(context(initial, case, request_type))
-    emit("nba_initial", {"actions": initial_actions})
+        earliest = min(int(row["epoch"]) for row in initial.episode)
+        if earliest < int(flag["epoch"]) - 48*3600:
+            # A graph-expanded episode may start before the flagged-card window.
+            # Recompute its reference history without any identified episode rows.
+            clean_baseline = [row for row in baseline.get("transactions", []) if int(row["epoch"]) < earliest]
+            initial = assess(case, flag, window, clean_baseline, ring.get("transactions", []),
+                             library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths)
+        earlier_memory = library.get("memory", [])
+        if earlier_memory:
+            initial.evidence.append(evidence(
+                f"Retrieved {len(earlier_memory)} earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
+                "graph", "query:case_library", [row["case_id"] for row in earlier_memory]))
+        if not documents:
+            trace["warnings"].append("No graph policy documents were returned; using the versioned dataset policy encoded in code.")
+        if documents:
+            initial.evidence.append(evidence(
+                "Retrieved policy chunks: " + "; ".join(f"{doc['doc_id']} ({doc.get('match_label', 'policy text')}; RRF={doc.get('fused_score', 0):.6f})" for doc in documents[:12]),
+                "document", "retrieval:policy_chunks", []))
+        trace["retrieved_document_ids"] = [doc.get("doc_id", "") for doc in documents]
+        trace["retrieval_methods"] = {row["case_id"]: row["retrieval_method"] for row in initial.precedents}
+        trace["precedent_retrieval"] = [{k: row[k] for k in ("case_id", "fused_score", "provenance") if k in row} for row in initial.precedents]
+        trace["retrieved_memory_ids"] = [row["case_id"] for row in earlier_memory]
+        trace["initial_families"] = initial.families
+        trace["initial_probability"] = initial.probability
+        trace["candidate_exposure_usd"] = round(sum(abs(float(row["amount"])) for row in initial.episode), 2)
+        for item in initial.evidence:
+            emit("evidence_added", {"phase": "initial", **item})
+        emit("assessment", {"phase": "initial", "probability": initial.probability,
+                            "verdict": initial.verdict, "family_contributions": initial.families,
+                            "pattern": initial.pattern, "exposure_usd": initial.exposure})
+        stop = stopping_reason(context(initial, case), verified=(initial.response == "denied" and not initial.features["recurring_match"]))
+        if initial.response == "denied" and not initial.features["recurring_match"]:
+            stop = "R2 and section 6: the customer denial already recorded in the case pack settles the authorization question for this recommendation. No additional customer contact was performed."
+        request_type = "" if stop else choose_request(initial)
+        state("INITIAL_NBA")
+        initial_actions = recommend(context(initial, case, request_type))
+        trace["initial_policy_context"] = asdict(context(initial, case, request_type))
+        emit("nba_initial", {"actions": initial_actions})
+    else:
+        if resume_state.get("case") != case:
+            raise ValueError("Evidence continuation belongs to a different trigger.")
+        initial = Assessment(**resume_state["initial"])
+        documents = resume_state["documents"]
+        initial_actions = resume_state["initial_actions"]
+        request_type, stop = resume_state["request_type"], resume_state["stop"]
+        as_of = int(pd.Timestamp(case["opened_at"], tz="UTC").timestamp())
     result = initial
     requests = []
     if request_type:
-        state("REQUEST_EVIDENCE")
-        emit("evidence_requested", {"type": request_type,
-                                    "reason": evidence_request_reason(request_type, initial_actions),
-                                    "precedent_ids": [row["case_id"] for row in initial.precedents],
-                                    "simulated": True})
-        response, response_text = simulate_response(initial, request_type)
-        requests.append({"type": request_type, "asked_after_step": 4, "assumed_response": response_text})
+        if resume_state is None:
+            state("REQUEST_EVIDENCE")
+        request = {"type": request_type,
+                   "reason": evidence_request_reason(request_type, initial_actions),
+                   "precedent_ids": [row["case_id"] for row in initial.precedents],
+                   "precedents": initial.precedents,
+                   "simulated": not (live and mode_evidence == "human"),
+                   "source": "human" if live and mode_evidence == "human" else "simulated"}
+        if live and mode_evidence == "human" and evidence_response is None:
+            raise EvidencePaused({"case": case, "initial": asdict(initial), "documents": documents,
+                "initial_actions": initial_actions, "request_type": request_type, "stop": stop,
+                "trace": trace, "elapsed_s": round(time.perf_counter()-started, 4),
+                "tool_calls": graph.tool_calls-call_start}, request)
+        if live and mode_evidence == "human":
+            response, response_text = human_response(evidence_response)
+            attribution = {key: evidence_response[key] for key in
+                           ("request_id", "response_type", "answered_by", "answered_at")}
+            attribution["source"] = "human"
+            attribution["note"] = evidence_response.get("note", "")
+        else:
+            emit("evidence_requested", request)
+            response, response_text = simulate_response(initial, request_type)
+            attribution = ({"source": "simulated", "answered_by": "deterministic_simulator",
+                            "answered_at": datetime.now(timezone.utc).isoformat()} if live else {})
+        requests.append({"type": request_type, "asked_after_step": 4, "assumed_response": response_text, **attribution})
         emit("evidence_received", {"type": request_type, "response": response,
-                                   "assumed_response": response_text, "simulated": True})
+                                   "assumed_response": response_text, "simulated": request["simulated"], **attribution})
         state("REASSESS")
         result = reassess(initial, response, response_text)
         for item in result.evidence[len(initial.evidence):]:
@@ -201,7 +264,7 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
     trace["final_policy_context"] = asdict(context(result, case)) if requests else trace["initial_policy_context"]
     if not stop:
         stop = ("Section 6: the remaining uncertainty is authorization that anonymized records cannot settle. "
-                "The simulated response added no decisive evidence; further automated steps are unlikely to change the recommendation. "
+                f"The {'human-recorded' if live and mode_evidence == 'human' else 'simulated'} response added no decisive evidence; further automated steps are unlikely to change the recommendation. "
                 + ("R8 escalation is recommended." if any(a["action"] == "ESCALATE_TO_ANALYST" for a in final_actions) else "The card remains under monitoring and the case remains open."))
     words = templates(case, result, initial, requests, final_actions, stop)
     emit("nba_final", {"actions": final_actions, "what_changed": words["what_changed"]})
@@ -229,7 +292,7 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
     answer = {
         "case_id": case["case_id"],
         "metadata": {"llm_model_used": trace.get("llm_model_used", "template"),
-                     "llm_attempts": trace.get("llm_attempts", 0)},
+                     "llm_attempts": trace.get("llm_attempts", 0), "mode_evidence": mode_evidence if live else "simulated"},
         "case": {"status": status, "verdict": result.verdict, "fraud_probability": result.probability,
                  "pattern": result.pattern, "pattern_description": words["pattern_description"] if result.pattern == "undocumented" else "",
                  "affected_txn_ids": [str(row["txn_id"]) for row in rows],
@@ -252,6 +315,9 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
     }
     emit("sar_drafted", {**answer["sar"], "recommendation_only": True,
                          "filing_status": "awaiting_l2_approval" if files_report else "not_recommended"})
+    trace["final_probability"], trace["final_families"] = result.probability, result.families
+    if validate_before_write is not None:
+        validate_before_write(answer, trace)
     state("WRITE_BACK")
     # The existing case-pack ID is also the graph vertex ID: no invented IDs.
     stored = json.loads(json.dumps(answer))
@@ -272,6 +338,8 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
     try:
         with index_lock(graph.use_local, exclusive=True):
             for spec in index_specs(graph.use_local):
+                if live and (spec.key != "bge" or spec.attribute != "emb_bge"):
+                    continue
                 completed = covered_ids(spec, graph.use_local)
                 if not completed:
                     continue

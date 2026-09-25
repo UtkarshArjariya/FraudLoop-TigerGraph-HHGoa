@@ -2,7 +2,7 @@
 
 FRAUDLOOP investigates the 20 HHGOA fraud alerts using TigerGraph evidence, historical cases, policy rules, and guarded model narration. Assessment and policy code decide probabilities, verdicts, recommendations, approval routes, and stopping conditions. Gemini writes the summary, SAR narrative, and explanation of changed recommendations from the retrieved evidence.
 
-All bank actions are recommendations. Additional customer, step-up, and analyst responses are disclosed deterministic simulations. Generated case memory is an earlier agent conclusion, not a confirmed historical bank outcome. Evidence is bounded by each case's `opened_at`; original Kaggle fraud labels are never used.
+All bank actions are recommendations. Evidence responses are either disclosed deterministic simulations or human entries attributed to the answering demo role and timestamp. Generated case memory is an earlier agent conclusion, not a confirmed historical bank outcome. Evidence is bounded by each case's `opened_at`; original Kaggle fraud labels are never used.
 
 The preserved graded answers contain **9 fraud, 8 legitimate and 3 uncertain judgments, with 2 SAR recommendations**. All 20 passed schema, dataset-ID, exposure, chronology, route and policy validation at the overnight baseline. These are policy-engine judgments, not measured accuracy against the hidden answer key. See [the complete policy audit](docs/policy-audit.md), [the blog draft](docs/blog.md), [the four-minute video script](docs/video-script.md), and [the morning delivery report](docs/MORNING_REPORT.md).
 
@@ -25,12 +25,12 @@ Open **http://localhost:5173**. The backend is **http://127.0.0.1:8000**, with i
 Use **Replay** on HHG-014 for graph expansion and SAR routing, and on HHG-002 for a changed recommendation after simulated confirmation. Saved replay events require no graph or model calls. Some events reconstructed from older traces are labeled as reconstructed and have no measured per-tool duration; fresh live runs capture actual tool events. For an entirely local demo, including graph-neighborhood reads:
 
 ```bash
-FRAUDLOOP_LOCAL_ONLY=1 make demo
+FRAUDLOOP_LOCAL_ONLY=1 FRAUDLOOP_ENABLE_LLM=0 make demo
 ```
 
-The **Run live** control starts the real state machine. It uses official MCP graph operations when available and truthful local fallback otherwise. A successful API run atomically saves `data/runtime_cases/<case_id>.json` as a snapshot envelope containing `answer`, `trace`, `timeline`, and `run_id`; the stream emits `done` only after that snapshot is saved. The API unwraps its answer and serves the matching trace/replay. Failed attempts are stored separately under `data/runtime_failed_timelines/<case_id>-<run_id>.json`, preserving the last successful snapshot and committed replay. Legacy separate `data/runtime_traces/` and `data/runtime_timelines/` files remain readable. Graded `cases/` files and committed timelines are never overwritten by API runs. A successful runtime answer takes precedence in the console, with its source labeled. New trigger creation first queues a retrospective case; opening the returned POST stream starts its investigation.
+The **Run live** control starts the real state machine. It uses official MCP graph operations when available and truthful local fallback otherwise. A successful API run atomically saves `cases_live/<case_id>.json` as a snapshot envelope containing `answer`, `trace`, `timeline`, and `run_id`; the stream emits `done` only after that snapshot is saved. The API unwraps its answer and serves the matching trace/replay. Failed attempts are stored separately under `data/runtime_failed_timelines/<case_id>-<run_id>.json`, preserving the last successful snapshot and committed replay. New live timelines are saved in `data/timelines_live/`. Legacy runtime snapshots, traces and timelines remain readable. Graded `cases/` files and committed timelines are never overwritten by API runs. A successful runtime answer takes precedence in the console, with its source labeled. New trigger creation first queues a retrospective case; opening the returned POST stream starts its investigation.
 
-Backend narration defaults to templates. Set `FRAUDLOOP_ENABLE_LLM=1` before starting the backend to enable the configured Gemini chain; attempts are capped at 60 in the persistent `data/api_llm_budget.json`. Do not clear that file during a quota-limited run. Replay never spends that budget. Model-backed retrieval in a live run may also need the relevant query embedding provider and quota; replay is the dependable recording path.
+Live narration uses the configured Gemini fallback chain. Set `FRAUDLOOP_ENABLE_LLM=0` before starting the backend for template-only narration; attempts are capped at 60 in the persistent `data/api_llm_budget.json`. Do not clear that file during a quota-limited run. Replay never spends that budget. Model-backed retrieval in a live run may also need the relevant query embedding provider and quota; replay is the dependable recording path.
 
 | Target | Purpose |
 |---|---|
@@ -101,7 +101,34 @@ curl --no-buffer -X POST \
 
 The top-bar role switcher sends `X-Role: viewer`, `analyst_l1`, or `supervisor_l2`. Viewer has no approval rights; L1 decides only L1 actions; L2 decides either level. Wrong roles return 403. Decisions persist in `data/approvals.json`, then an audit entry is added to the FraudCase if the GSE write guard passes. A failed graph audit is reported truthfully while retaining the local decision. **The role header is a local demonstration mechanism, not authenticated identity; keep this service on your trusted workstation.**
 
-Approval records do not execute bank actions. Customer/step-up/analyst replies beyond case-pack triggers are disclosed deterministic simulations. No real customer was contacted, card blocked, or SAR sent. Saved answers predate the multi-index retrieval refactor and used template narration; missing historical similarity/provenance is shown as missing rather than fabricated. Generated memory is not confirmed bank truth, and shared coarse profiles or billing-region codes alone do not establish a fraud ring.
+Approval records do not execute bank actions. Human evidence entries record their source, answering demo role and timestamp; simulated replies remain explicitly labeled. No real customer was contacted, card blocked, or SAR sent. Saved answers predate the multi-index retrieval refactor and used template narration; missing historical similarity/provenance is shown as missing rather than fabricated. Generated memory is not confirmed bank truth, and shared coarse profiles or billing-region codes alone do not establish a fraud ring.
+
+## Human evidence in live investigations
+
+Choose **Human** under **Evidence responses** in New investigation, or on a case
+before choosing **Run live**. When policy needs more evidence, the agent persists
+its assessment in `data/pending_evidence.json`, publishes `evidence_requested`,
+and releases its graph session while it waits. Early stopping still applies: a
+case with enough evidence may finish without requesting another response.
+
+The case page shows the reason, supporting precedents and initial actions. Select
+**analyst_l1** or **supervisor_l2**, choose a response, add a note, and submit. The
+same SSE timeline continues through reassessment, final actions and the SAR
+decision. **What changed** explains the effect. Human notes do not themselves
+establish authorization; explicit customer and step-up response types drive the
+existing policy reassessment.
+
+`POST /api/cases/{id}/evidence` accepts `request_id`, `response_type` and `note`.
+Response types are `customer_confirms`, `customer_denies`, `stepup_passed`,
+`stepup_failed`, and `analyst_note`. The role header is required. A stale request
+or conflicting second response is rejected. Disconnecting the browser does not
+cancel the request; reconnecting or restarting the server resumes the persisted
+assessment. Human entries retain who answered and when in `evidence_requests`.
+This records an analyst's entry, not an authenticated bank-customer interaction.
+
+Live answers and replays are isolated in `cases_live/` and
+`data/timelines_live/`; the twenty graded answers and `data/timelines/` remain
+untouched. New live summary vectors use the existing BGE `emb_bge` attribute.
 
 ## Docker Compose
 

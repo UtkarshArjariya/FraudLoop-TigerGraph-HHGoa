@@ -56,6 +56,18 @@ class EvidenceRequest(StrictModel):
     type: Literal["customer_validation", "step_up_auth", "analyst_info"]
     asked_after_step: Count
     assumed_response: Text
+    source: Literal["human", "simulated"] = "simulated"
+    request_id: str = ""
+    response_type: str = ""
+    answered_by: str = ""
+    answered_at: str = ""
+    note: str = ""
+
+    @model_validator(mode="after")
+    def human_attribution(self) -> "EvidenceRequest":
+        if self.source == "human" and not all((self.request_id, self.response_type, self.answered_by, self.answered_at)):
+            raise ValueError("human evidence requires request identity and responder attribution")
+        return self
 
 
 class Action(StrictModel):
@@ -157,6 +169,7 @@ class SAR(StrictModel):
 class AnswerMetadata(StrictModel):
     llm_model_used: Text = "template"
     llm_attempts: Count = 0
+    mode_evidence: Literal["human", "simulated"] = "simulated"
 
 
 class Answer(StrictModel):
@@ -234,6 +247,10 @@ def _response(answer: Answer, pack: dict, ctx: dict, stage: str) -> str:
     response = "denied" if pack.get("trigger_type") == "customer_report" else ""
     if stage == "final":
         for request in answer.evidence_requests:
+            if request.source == "human":
+                response = {"customer_confirms": "confirmed", "customer_denies": "denied",
+                            "stepup_passed": "confirmed"}.get(request.response_type, "")
+                continue
             text = request.assumed_response.lower()
             if re.search(r"(?:assume|customer|cardholder).{0,45}\b(?:confirms|confirmed|confirmation)\b", text):
                 response = "confirmed"
