@@ -1,0 +1,505 @@
+.rag-layout {
+  display: grid;
+  grid-template-columns: minmax(285px, 330px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.rag-layout > .secondary-panel + .secondary-panel {
+  margin-top: 0;
+}
+.rag-settings h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rag-settings h2 svg {
+  color: var(--muted);
+}
+.rag-settings fieldset {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 20px;
+}
+.rag-settings legend {
+  float: none;
+  max-width: 100%;
+  margin-bottom: 0;
+  padding: 16px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.rag-index-fields {
+  border-bottom: 1px solid var(--border) !important;
+}
+.rag-index-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 67px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+  min-width: 0;
+}
+.rag-index-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  min-width: 0;
+}
+.rag-index-toggle > input {
+  min-height: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  margin: 0;
+  flex-shrink: 0;
+}
+.rag-index-toggle > span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rag-index-toggle strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.rag-index-toggle small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.rag-weight {
+  display: grid;
+  gap: 2px;
+  text-align: center;
+}
+.rag-weight input {
+  width: 67px;
+  min-height: 32px;
+  padding: 5px 7px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  background: var(--bg);
+}
+.rag-weight > span:last-child {
+  color: var(--muted);
+  font-size: 10px;
+}
+.rag-range-fields {
+  display: grid;
+  gap: 18px;
+}
+.rag-range-fields legend {
+  margin: 0;
+}
+.rag-range-field > label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.rag-range-field > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.rag-range-field input[type="range"] {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  height: 24px;
+  min-height: 24px;
+  background: transparent;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.rag-range-field input[type="number"] {
+  width: 75px;
+  padding: 5px 7px;
+  min-height: 32px;
+  background: var(--bg);
+  font-size: 12px;
+  font-family: "IBM Plex Mono", monospace;
+}
+.rag-range-field > p {
+  margin-top: 6px;
+  font-size: 11px;
+}
+.rag-settings fieldset:disabled {
+  opacity: 0.72;
+}
+.rag-settings-footer {
+  padding: 16px 20px 20px;
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+}
+.rag-settings-footer > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rag-settings-footer .button {
+  flex: 1;
+  padding-inline: 9px;
+  font-size: 12px;
+}
+.rag-save-success {
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.rag-query-form {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 14px;
+}
+.rag-query-mode {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+.rag-query-mode label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rag-query-mode input {
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.rag-query-form > select,
+.rag-query-form > textarea {
+  width: 100%;
+  min-width: 0;
+  background: var(--bg);
+  font-size: 13px;
+}
+.rag-query-form > textarea {
+  resize: vertical;
+}
+.rag-query-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.rag-query-actions > .helper {
+  max-width: 46ch;
+  font-size: 11px;
+}
+.rag-preview-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 12px 20px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--bg);
+}
+.rag-preview-summary > span:last-child {
+  margin-left: auto;
+}
+.rag-preview-error {
+  padding: 0 20px;
+}
+.rag-notice {
+  padding: 12px 20px;
+  border-block: 1px solid var(--border);
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 12px;
+}
+.rag-notice p + p {
+  margin-top: 5px;
+}
+.rag-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  padding-inline: 12px;
+}
+.rag-tabs > button {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 13px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.rag-tabs > button[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+}
+.rag-tabs > button:focus-visible {
+  outline-offset: -4px;
+}
+.rag-tab-panel {
+  min-width: 0;
+  outline-offset: -3px;
+}
+.rag-result {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.rag-result:last-child {
+  border-bottom: 0;
+}
+.rag-result-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.rag-result-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.rag-result-heading > div > strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.rag-result-heading .chip {
+  font-size: 11px;
+}
+.rag-result-score {
+  color: var(--muted);
+  font-size: 10px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.rag-result-score strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400;
+}
+.rag-result h3 {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.rag-result-prose {
+  font-size: 12px;
+  margin-block: 10px 16px;
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 85ch;
+}
+.rag-contributions {
+  margin-top: 16px;
+  display: grid;
+  gap: 7px;
+  max-width: 580px;
+}
+.rag-contribution {
+  display: grid;
+  grid-template-columns: minmax(85px, 140px) minmax(36px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+.rag-source-name {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.rag-contribution > .mono {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.rag-contribution > .mono > .muted {
+  margin-left: 8px;
+}
+.rag-contribution-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.rag-contribution-track > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.rag-contributions > .helper {
+  margin-top: 3px;
+  font-size: 10px;
+}
+.rag-policy-text,
+.rag-result-paths {
+  font-size: 12px;
+  margin-top: 12px;
+}
+.rag-policy-text summary,
+.rag-result-paths summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.rag-policy-text p {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  color: var(--muted);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.rag-result-paths ul {
+  padding-left: 18px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.rag-path-list {
+  padding: 20px;
+}
+.rag-path-list ul {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.rag-path-list li {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+}
+.rag-path-list li > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.rag-path-list li > span {
+  overflow-wrap: anywhere;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+.rag-context {
+  padding: 20px;
+}
+.rag-context-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.rag-context h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+}
+.rag-context-heading p {
+  margin-top: 6px;
+}
+.rag-context pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 16px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  line-height: 1.8;
+  max-height: 700px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 16px 0 0;
+}
+@media (max-width: 1150px) {
+  .rag-layout {
+    grid-template-columns: minmax(260px, 290px) minmax(0, 1fr);
+    gap: 16px;
+  }
+  .rag-query-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .rag-contribution {
+    grid-template-columns: minmax(65px, 110px) minmax(20px, 1fr) auto;
+    gap: 7px;
+  }
+  .rag-settings fieldset {
+    padding: 16px;
+  }
+  .rag-settings-footer {
+    padding: 16px;
+  }
+}
+@media (max-width: 760px) {
+  .rag-layout {
+    grid-template-columns: 1fr;
+  }
+  .rag-settings {
+    order: 2;
+  }
+  .rag-playground {
+    order: 1;
+  }
+  .rag-query-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+  .rag-range-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .rag-range-fields legend {
+    grid-column: 1/-1;
+  }
+  .rag-index-fields > .helper {
+    clear: both;
+  }
+}
+@media (max-width: 480px) {
+  .rag-query-form,
+  .rag-result,
+  .rag-context,
+  .rag-path-list {
+    padding: 16px;
+  }
+  .rag-query-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .rag-range-fields {
+    grid-template-columns: 1fr;
+  }
+  .rag-tabs {
+    padding-inline: 6px;
+  }
+  .rag-tabs > button {
+    padding-inline: 8px;
+    font-size: 11px;
+    min-height: 44px;
+  }
+  .rag-contribution {
+    grid-template-columns: minmax(75px, 110px) minmax(24px, 1fr) auto;
+    gap: 7px;
+  }
+  .rag-contribution > .mono > .muted {
+    margin-left: 4px;
+  }
+  .rag-preview-summary > span:last-child {
+    margin-left: 0;
+  }
+}

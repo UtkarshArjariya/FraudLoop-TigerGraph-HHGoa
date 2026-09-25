@@ -810,9 +810,11 @@ tbody tr:hover {
   .sidebar nav {
     display: flex;
     gap: 8px;
+    overflow-x: auto;
   }
   .sidebar nav a {
     padding: 8px 12px;
+    flex-shrink: 0;
   }
   .sidebar-note,
   .sidebar-bottom {

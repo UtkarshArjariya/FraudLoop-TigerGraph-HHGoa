@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.data import Repository, atomic_json, read_json, utc_now
 from backend.services import GraphGateway, InvestigationManager
+from backend.rag import rag_router
 
 logger = logging.getLogger("fraudloop.api")
 
@@ -122,6 +123,8 @@ def create_app(root: Path | str | None = None):
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
         allow_credentials=False, allow_methods=["GET", "POST", "PUT"], allow_headers=["Content-Type", "X-Role"])
     app.state.repository, app.state.gateway, app.state.manager = repo, gateway, manager
+    app.include_router(rag_router(repo, gateway, manager))
+    app.state.trigger_lock = trigger_lock
 
     @app.middleware("http")
     async def request_logging(request, call_next):
@@ -183,7 +186,8 @@ def create_app(root: Path | str | None = None):
             "pending_evidence": pending,
             "family_contributions": trace.get("final_families", {}), "initial_family_contributions": trace.get("initial_families", {}),
             "initial_probability": trace.get("initial_probability"),
-            "answer_source": "runtime" if (repo.runtime / f"{case_id}.json").exists() else "graded" if answer else "pending"}
+            "answer_source": "runtime" if any((folder / f"{case_id}.json").exists() for folder in
+                (repo.runtime, repo.legacy_runtime)) else "graded" if answer else "pending"}
 
     @app.get("/api/cases/{case_id}/timeline")
     async def timeline(case_id: str):

@@ -20,6 +20,7 @@ from agent.service_errors import rate_limited, transient, retry_delay, status_co
 
 from agent.model_clients import configured, get_client
 from agent.quota import QuotaState
+from agent.rag import narration_contents
 
 
 TEXT_FIELDS = ("summary", "pattern_description",
@@ -234,8 +235,7 @@ class Narrator:
             return words, metrics
         metrics["llm_fallback_reason"] = "no_discovered_models" if not self.models else "all_models_cooling_down"
         try:
-            contents = json.dumps({"evidence_brief": brief, "fallback_templates": fallback,
-                                   "allowed_entity_ids": sorted(allowed_ids)}, allow_nan=False)
+            contents = narration_contents(brief, fallback, allowed_ids)
             for model in self.models:
                 if self.quota.remaining(model) > 0:
                     continue

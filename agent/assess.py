@@ -13,7 +13,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from agent.retrieval import reciprocal_rank_fusion, match_label
+from agent.retrieval import reciprocal_rank_fusion, match_label, eligible_library, PATH_HOPS
+from agent.rag import settings
 
 
 def sigmoid(value: float) -> float:
@@ -78,12 +79,16 @@ class Assessment:
 
 
 def rank_precedents(cases: list[dict], flag: dict, features: dict, prior_ids: set[str],
-                    vector_scores: dict[str, float] | None = None, *, vector_rankings=None, paths=None) -> list[dict]:
+                    vector_scores: dict[str, float] | None = None, *, vector_rankings=None, paths=None,
+                    rag_config=None, as_of=None) -> list[dict]:
     """Retrieve top five using semantic rank plus concrete graph relationships.
 
 Lexical ranking is explicit when no real query embedding exists. The selected
 outcomes are corrected for the fraud-heavy historical sampling before scoring.
 """
+    config = settings(rag_config)
+    if as_of is not None:
+        cases = eligible_library({"cases": cases}, as_of, config)["cases"]
     ranked = []
     device_name = str(flag.get("DeviceInfo", "")).split(" Build", 1)[0].lower()
     expected_pattern = ("undocumented" if features["split_burst"] or features["coordinated_device"] else
@@ -96,10 +101,11 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
         pattern = case.get("pattern", "none")
         score = .05
         reasons = []
-        if case.get("card_id") == flag["card_id"]:
+        if case.get("card_id") == flag["card_id"] and config.graph_hop_depth >= 1 and config.graph_similarity_weight > 0:
             score += 1.0
             reasons.append("same dataset card")
-        if case["case_id"] in prior_ids:
+        if case["case_id"] in prior_ids and config.graph_similarity_weight > 0 and any(
+                PATH_HOPS.get(path, 99) <= config.graph_hop_depth for path in (paths or {}).get(case["case_id"], ["shared_card"])):
             score += .2
             reasons.append("graph card/device/region relationship")
         if pattern == expected_pattern:
@@ -137,20 +143,21 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
         ranked.append(row)
     ordered = sorted(ranked, key=lambda r: (-r["similarity_score"], r["case_id"]))
     if vector_rankings is None:
-        return ordered[:5]  # Compatibility for callers without multi-index retrieval.
+        return ordered[:config.top_k_precedents]  # Compatibility without multi-index retrieval.
     graph_rank = []
     for row in ordered:
         basis = list((paths or {}).get(row["case_id"], []))
         if row.get("card_id") == flag.get("card_id"):
             basis.append("shared_card")
-        if row.get("pattern") == expected_pattern:
-            basis.append("same_pattern")
+        basis = [path for path in basis if PATH_HOPS.get(path, 99) <= config.graph_hop_depth]
         if basis:
             graph_rank.append({"id": row["case_id"], "paths": sorted(set(basis))})
     # Narrative analogues are a distinct retrieval source, never a claimed graph edge.
     rankings = {**vector_rankings, "graph": graph_rank,
+                "pattern": [row["case_id"] for row in ordered if row.get("pattern") == expected_pattern],
                 "analyst narrative": [row["case_id"] for row in ordered]}
-    fused = reciprocal_rank_fusion(rankings)
+    fused = reciprocal_rank_fusion(rankings, k=config.rrf_k,
+                                   weights={source: config.source_weight(source) for source in rankings})
     by_id = {row["case_id"]: row for row in ranked}
     result = []
     for hit in fused:
@@ -158,10 +165,10 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
             continue  # Generated memory must not influence confirmed-outcome counts.
         row = by_id[hit["id"]]
         row.update(similarity_score=hit["fused_score"], fused_score=hit["fused_score"],
-                   provenance=hit["provenance"], retrieval_method="rrf",
+                   provenance=hit["provenance"], retrieval_method="rrf", match_label=match_label(hit["provenance"]),
                    retrieval_basis=f"{match_label(hit['provenance'])}; RRF={hit['fused_score']:.6f}")
         result.append(row)
-    selected = result[:5]
+    selected = result[:config.top_k_precedents]
     total = sum(row["fused_score"] for row in selected)
     # RRF scores depend on the number of indexes, not evidence strength. Give
     # the selected precedents a fixed total weight within the capped family.
@@ -172,7 +179,8 @@ outcomes are corrected for the fraud-heavy historical sampling before scoring.
 
 def assess(case: dict, flag: dict, window_rows: list[dict], baseline_rows: list[dict],
            ring_rows: list[dict], historical: list[dict], prior_ids: set[str],
-           *, vector_scores: dict[str, float] | None = None, vector_rankings=None, paths=None) -> Assessment:
+           *, vector_scores: dict[str, float] | None = None, vector_rankings=None, paths=None,
+           rag_config=None) -> Assessment:
     as_of = int(pd.Timestamp(case["opened_at"], tz="UTC").timestamp())
     window = frame(window_rows)
     baseline = frame(baseline_rows)
@@ -221,7 +229,8 @@ def assess(case: dict, flag: dict, window_rows: list[dict], baseline_rows: list[
                     full_profile=full_profile, proxy=proxy, recurring_match=recurring_match,
                     recurring_candidate=recurring_candidate,
                     evidence_conflicts=False, shared_fraud=bool(coordinated_device))
-    precedents = rank_precedents(historical, flag, features, prior_ids, vector_scores, vector_rankings=vector_rankings, paths=paths)
+    precedents = rank_precedents(historical, flag, features, prior_ids, vector_scores,
+        vector_rankings=vector_rankings, paths=paths, rag_config=rag_config, as_of=as_of)
     families: dict[str, float] = {}
     found: list[dict] = []
     base_refs = baseline.tail(4).txn_id.tolist() if len(baseline) else []
@@ -288,7 +297,7 @@ def assess(case: dict, flag: dict, window_rows: list[dict], baseline_rows: list[
         prior_probability = (1 + fraud_weight / (4665/900)) / (2 + fraud_weight / (4665/900) + clear_weight)
         families["precedent_outcomes"] = float(np.clip(math.log(prior_probability/(1-prior_probability)), -1.2, .8))
         found.append(evidence(
-            "Top-five retrieved precedents: " + "; ".join(f"{p['case_id']} ({p.get('outcome',p.get('verdict','unknown'))}; retrieval_method={p['retrieval_method']}; {p['retrieval_basis']})" for p in precedents)
+            f"Top-{len(precedents)} retrieved precedents: " + "; ".join(f"{p['case_id']} ({p.get('outcome',p.get('verdict','unknown'))}; retrieval_method={p['retrieval_method']}; {p['retrieval_basis']})" for p in precedents)
             + ". Outcomes are discounted for the fraud-heavy historical sample and do not label this transaction.",
             "document", "retrieval:hybrid_precedents", [p["case_id"] for p in precedents]))
     disputed = case["trigger_type"] == "customer_report"

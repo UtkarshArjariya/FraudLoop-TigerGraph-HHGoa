@@ -1,0 +1,21 @@
+{
+  "enabled_indexes": {
+    "bge": true,
+    "gemma": true,
+    "gem001": true,
+    "gem2": true
+  },
+  "rrf_weights": {
+    "bge": 1.0,
+    "gemma": 1.0,
+    "gem001": 1.0,
+    "gem2": 1.0
+  },
+  "rrf_k": 60,
+  "top_k_precedents": 5,
+  "top_k_policy_chunks": 12,
+  "graph_hop_depth": 4,
+  "time_window_days": 365,
+  "min_similarity": -1.0,
+  "graph_similarity_weight": 1.0
+}

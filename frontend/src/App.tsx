@@ -15,6 +15,7 @@ import {
   Moon,
   ShieldCheck,
   Sun,
+  SlidersHorizontal,
   Workflow,
 } from "lucide-react";
 import { activeRole, api, setApiRole } from "./api";
@@ -24,6 +25,7 @@ import Queue from "./pages/Queue";
 import CaseDetail from "./pages/CaseDetail";
 import Approvals from "./pages/Approvals";
 import Memory from "./pages/Memory";
+import GraphRAG from "./pages/GraphRAG";
 export const RoleContext = createContext<{
   role: Role;
   setRole: (value: Role) => void;
@@ -191,6 +193,10 @@ export default function App() {
               <Database size={18} aria-hidden />
               Case memory
             </NavLink>
+            <NavLink to="/rag">
+              <SlidersHorizontal size={18} aria-hidden />
+              GraphRAG
+            </NavLink>
           </nav>
           <div className="sidebar-note">
             <ShieldCheck size={20} aria-hidden />
@@ -213,6 +219,7 @@ export default function App() {
               <Route path="/cases/:id" element={<CaseDetail />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/memory" element={<Memory />} />
+              <Route path="/rag" element={<GraphRAG />} />
               <Route
                 path="*"
                 element={

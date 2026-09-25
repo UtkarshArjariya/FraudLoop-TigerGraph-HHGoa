@@ -120,7 +120,8 @@ class Repository:
                 "status": "running" if cid in active else case.get("status", "queued"),
                 "sar": answer.get("sar", {}).get("file", False), "pending_approval_count": counts[cid],
                 "exposure_usd": case.get("exposure_usd", 0),
-                "answer_source": "runtime" if (self.runtime / f"{cid}.json").exists() else "graded" if answer else "pending"})
+                "answer_source": "runtime" if any((folder / f"{cid}.json").exists() for folder in
+                    (self.runtime, self.legacy_runtime)) else "graded" if answer else "pending"})
         return sorted(result, key=lambda row: (row["opened_at"], row["case_id"]), reverse=True)
 
     def find_transaction(self, *, txn_id=None, card_id=None):

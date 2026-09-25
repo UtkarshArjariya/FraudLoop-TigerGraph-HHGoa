@@ -15,7 +15,9 @@ import pandas as pd
 from agent.assess import Assessment, assess, choose_request, evidence, reassess, simulate_response
 from agent.embeddings import index_specs, index_lock, covered_ids, provider_for, embed_vectors, checkpoint_path
 from agent.events import EventCallback, ObservedGraph, evidence_request_reason, safe_emitter
-from agent.retrieval import retrieve_indexes, graph_paths
+from agent.retrieval import retrieve_indexes, graph_paths, eligible_library, describe_graph_paths
+from agent.rag import (settings, load_config, build_evidence_brief, allowed_entity_ids,
+                       context_packet, compact_precedent, compact_document)
 from agent.mcp_client import GraphClient, GraphError
 from agent.policy import PolicyContext, recommend, stopping_reason
 
@@ -110,14 +112,16 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
                       emit: EventCallback | None = None, live: bool = False,
                       mode_evidence: str = "simulated", resume_state: dict | None = None,
                       evidence_response: dict | None = None,
-                      validate_before_write: Callable | None = None) -> tuple[dict, dict]:
+                      validate_before_write: Callable | None = None, rag_config=None,
+                      preview_only: bool = False) -> tuple[dict, dict]:
     """Run the existing policy flow with an optional nonfatal synchronous observer."""
     observer = safe_emitter(emit)
     observed_graph = ObservedGraph(graph, observer) if emit is not None else graph
     try:
         return await _investigate(case, observed_graph, narrator=narrator, emit=observer, live=live,
                                   mode_evidence=mode_evidence, resume_state=resume_state,
-                                  evidence_response=evidence_response, validate_before_write=validate_before_write)
+                                  evidence_response=evidence_response, validate_before_write=validate_before_write,
+                                  rag_config=rag_config, preview_only=preview_only)
     except EvidencePaused:
         raise
     except Exception as exc:
@@ -129,13 +133,26 @@ async def investigate(case: dict, graph: GraphClient, *, narrator: Callable | No
 async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | None,
                        emit: EventCallback, live: bool = False, mode_evidence: str = "simulated",
                        resume_state: dict | None = None, evidence_response: dict | None = None,
-                       validate_before_write: Callable | None = None) -> tuple[dict, dict]:
+                       validate_before_write: Callable | None = None, rag_config=None,
+                       preview_only: bool = False) -> tuple[dict, dict]:
     if mode_evidence not in {"simulated", "human"}:
         raise ValueError("Unknown evidence mode.")
     started = time.perf_counter() - (resume_state or {}).get("elapsed_s", 0)
     call_start = graph.tool_calls - (resume_state or {}).get("tool_calls", 0)
     trace = (resume_state or {}).get("trace") or {"case_id": case["case_id"], "backend": "local" if graph.use_local else "tigergraph-mcp",
              "states": [], "input_tokens": 0, "output_tokens": 0, "llm_latency_s": 0.0, "warnings": []}
+    # A continuation is bound to the exact settings used for its initial
+    # assessment, even if a supervisor changes global settings while it waits.
+    config = settings(trace["rag_config"]) if trace.get("rag_config") else settings(rag_config) if rag_config is not None else load_config()
+    trace["rag_config"] = config.model_dump()
+
+    def inspect_context(result, documents, requests, initial_actions, final_actions, words, stage="final"):
+        brief = build_evidence_brief(case, result, documents, requests, initial_actions, final_actions, config)
+        trace["rag_preview"] = {**context_packet(brief, words, allowed_entity_ids(case, result), stage=stage),
+            "config": config.model_dump(), "precedents": [compact_precedent(row) for row in result.precedents],
+            "policy_chunks": [compact_document(row) for row in documents],
+            "graph_paths": describe_graph_paths(result.precedents)}
+        return brief
 
     def state(name: str):
         trace["states"].append({"state": name, "elapsed_s": round(time.perf_counter()-started, 4)})
@@ -170,19 +187,19 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
         docs_result = await graph.call("get_documents", {})
         documents = docs_result.get("documents", [])
         query_text = f"{case['trigger_type']}: {case['trigger_text']} Device {profile}; channel {flag['channel']}; product {flag['product']}."
-        vector_rankings, documents = await retrieve_indexes(graph, query_text, as_of, library, documents, trace)
-        paths = graph_paths(prior)
+        vector_rankings, documents = await retrieve_indexes(graph, query_text, as_of, library, documents, trace, config=config)
+        paths = graph_paths(prior, config=config)
         state("ASSESS")
         initial = assess(case, flag, window, baseline.get("transactions", []), ring.get("transactions", []),
-                         library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths)
+                         library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths, rag_config=config)
         earliest = min(int(row["epoch"]) for row in initial.episode)
         if earliest < int(flag["epoch"]) - 48*3600:
             # A graph-expanded episode may start before the flagged-card window.
             # Recompute its reference history without any identified episode rows.
             clean_baseline = [row for row in baseline.get("transactions", []) if int(row["epoch"]) < earliest]
             initial = assess(case, flag, window, clean_baseline, ring.get("transactions", []),
-                             library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths)
-        earlier_memory = library.get("memory", [])
+                             library.get("cases", []), {row["case_id"] for row in prior.get("cases", [])}, vector_rankings=vector_rankings, paths=paths, rag_config=config)
+        earlier_memory = eligible_library(library, as_of, config).get("memory", [])
         if earlier_memory:
             initial.evidence.append(evidence(
                 f"Retrieved {len(earlier_memory)} earlier FRAUDLOOP investigations as case memory. These are agent conclusions, potentially using simulated replies, not additional confirmed bank outcomes.",
@@ -191,7 +208,7 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
             trace["warnings"].append("No graph policy documents were returned; using the versioned dataset policy encoded in code.")
         if documents:
             initial.evidence.append(evidence(
-                "Retrieved policy chunks: " + "; ".join(f"{doc['doc_id']} ({doc.get('match_label', 'policy text')}; RRF={doc.get('fused_score', 0):.6f})" for doc in documents[:12]),
+                "Retrieved policy chunks: " + "; ".join(f"{doc['doc_id']} ({doc.get('match_label', 'policy text')}; RRF={doc.get('fused_score', 0):.6f})" for doc in documents),
                 "document", "retrieval:policy_chunks", []))
         trace["retrieved_document_ids"] = [doc.get("doc_id", "") for doc in documents]
         trace["retrieval_methods"] = {row["case_id"]: row["retrieval_method"] for row in initial.precedents}
@@ -233,6 +250,12 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
                    "simulated": not (live and mode_evidence == "human"),
                    "source": "human" if live and mode_evidence == "human" else "simulated"}
         if live and mode_evidence == "human" and evidence_response is None:
+            if preview_only:
+                words = templates(case, initial, initial, [], initial_actions,
+                                  "Human evidence is pending; final recommendations have not been made.")
+                inspect_context(initial, documents, [], initial_actions, [], words, "awaiting_human_evidence")
+                trace["warnings"].append("This is the initial context while human evidence is pending. The final Gemini brief depends on the recorded response.")
+                return {}, trace
             raise EvidencePaused({"case": case, "initial": asdict(initial), "documents": documents,
                 "initial_actions": initial_actions, "request_type": request_type, "stop": stop,
                 "trace": trace, "elapsed_s": round(time.perf_counter()-started, 4),
@@ -270,16 +293,9 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
     emit("nba_final", {"actions": final_actions, "what_changed": words["what_changed"]})
     state("SAR")
     tokens = 0
-    if narrator is not None:
-        brief = {"case_id": case["case_id"], "customer_id": case["customer_id"], "card_id": case["card_id"],
-                 "verdict": result.verdict, "probability": result.probability, "pattern": result.pattern,
-                 "exposure_usd": result.exposure, "evidence": result.evidence, "requests": requests,
-                 "episode": [{key: row.get(key) for key in ("txn_id", "ts", "amount", "channel", "region", "card_id", "customer_id", "device_profile")} for row in result.episode],
-                 "initial_actions": initial_actions, "final_actions": final_actions,
-                 "documents": documents[:12], "templates": words}
-        allowed_ids = {str(row[key]) for row in result.episode for key in ("txn_id", "card_id", "customer_id", "device_profile") if row.get(key)}
-        allowed_ids |= {entity for item in result.evidence for entity in item["entity_ids"]}
-        allowed_ids |= {case["case_id"], case["card_id"], case["customer_id"]}
+    brief = inspect_context(result, documents, requests, initial_actions, final_actions, words)
+    if narrator is not None and not preview_only:
+        allowed_ids = allowed_entity_ids(case, result)
         words, metrics = await narrator(brief, words, allowed_ids)
         trace.update(metrics)
         tokens = metrics.get("input_tokens", 0) + metrics.get("output_tokens", 0)
@@ -292,7 +308,8 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
     answer = {
         "case_id": case["case_id"],
         "metadata": {"llm_model_used": trace.get("llm_model_used", "template"),
-                     "llm_attempts": trace.get("llm_attempts", 0), "mode_evidence": mode_evidence if live else "simulated"},
+                     "llm_attempts": trace.get("llm_attempts", 0), "mode_evidence": mode_evidence if live else "simulated",
+                     "rag_config": config.model_dump()},
         "case": {"status": status, "verdict": result.verdict, "fraud_probability": result.probability,
                  "pattern": result.pattern, "pattern_description": words["pattern_description"] if result.pattern == "undocumented" else "",
                  "affected_txn_ids": [str(row["txn_id"]) for row in rows],
@@ -316,6 +333,10 @@ async def _investigate(case: dict, graph: GraphClient, *, narrator: Callable | N
     emit("sar_drafted", {**answer["sar"], "recommendation_only": True,
                          "filing_status": "awaiting_l2_approval" if files_report else "not_recommended"})
     trace["final_probability"], trace["final_families"] = result.probability, result.families
+    if preview_only:
+        # The preview returns before validators with external hooks, write_case,
+        # vector generation, checkpoint updates, or any completion event.
+        return answer, trace
     if validate_before_write is not None:
         validate_before_write(answer, trace)
     state("WRITE_BACK")

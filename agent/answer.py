@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from agent.policy import route_for
 from agent.store import TransactionStore
+from agent.rag import RagConfig
 
 
 Text = Annotated[str, Field(min_length=1)]
@@ -170,6 +171,7 @@ class AnswerMetadata(StrictModel):
     llm_model_used: Text = "template"
     llm_attempts: Count = 0
     mode_evidence: Literal["human", "simulated"] = "simulated"
+    rag_config: RagConfig | None = None
 
 
 class Answer(StrictModel):

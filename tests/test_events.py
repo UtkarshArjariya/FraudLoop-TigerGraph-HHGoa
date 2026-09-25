@@ -49,7 +49,7 @@ def investigation(monkeypatch):
     monkeypatch.setattr(module, "assess", lambda *args, **kwargs: deepcopy(initial))
     monkeypatch.setattr(module, "index_specs", lambda *args: [])
 
-    async def retrieval(observed_graph, *args):
+    async def retrieval(observed_graph, *args, **kwargs):
         # Calls made inside retrieval must receive the same observation hooks.
         await observed_graph.call("similar_cases", {"query_vec": [0.] * 768, "covered_ids": ["CC-1"]})
         return {}, []
@@ -289,3 +289,35 @@ def test_raw_human_note_remains_attributed_and_does_not_become_a_claim(investiga
     assert answer["evidence_requests"][0]["note"] == note
     assert answer["case"]["verdict"] == "uncertain"
     assert all("CC-999999" not in item["claim"] for item in answer["case"]["evidence"])
+
+
+def test_preview_never_narrates_or_writes_and_context_matches_live_call(investigation):
+    from agent.rag import narration_contents
+    module, case = investigation
+    captured = []
+    async def narrator(brief, words, allowed_ids):
+        captured.append(narration_contents(brief, words, allowed_ids))
+        return words, {}
+    _, live_trace = asyncio.run(module.investigate(case, FakeGraph(), narrator=narrator))
+    graph = FakeGraph()
+    answer, preview_trace = asyncio.run(module.investigate(case, graph, narrator=narrator, preview_only=True))
+    assert len(captured) == 1
+    assert preview_trace["rag_preview"]["llm_context"] == captured[0] == live_trace["rag_preview"]["llm_context"]
+    assert answer["case"]["written_to_graph"] is False
+    assert not any(name == "write_case" for name, _ in graph.calls)
+    assert not any(row["state"] in {"WRITE_BACK", "ANSWER"} for row in preview_trace["states"])
+
+
+def test_human_resume_and_preview_keep_original_rag_snapshot(investigation):
+    module, case = investigation
+    with pytest.raises(module.EvidencePaused) as paused:
+        asyncio.run(module.investigate(case, FakeGraph(), live=True, mode_evidence="human", rag_config={"rrf_k": 7}))
+    snapshot = json.loads(json.dumps(paused.value.snapshot))
+    _, preview_trace = asyncio.run(module.investigate(case, FakeGraph(), live=True, mode_evidence="human",
+        resume_state=deepcopy(snapshot), rag_config={"rrf_k": 99}, preview_only=True))
+    assert preview_trace["rag_preview"]["stage"] == "awaiting_human_evidence"
+    assert preview_trace["rag_preview"]["config"]["rrf_k"] == 7
+    answer, trace = asyncio.run(module.investigate(case, FakeGraph(), live=True, mode_evidence="human",
+        resume_state=snapshot, rag_config={"rrf_k": 99}, evidence_response={"request_id": "request-1",
+        "response_type": "customer_denies", "answered_by": "analyst_l1", "answered_at": "2026-09-25T12:00:00+00:00"}))
+    assert answer["metadata"]["rag_config"]["rrf_k"] == trace["rag_config"]["rrf_k"] == 7

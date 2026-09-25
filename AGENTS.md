@@ -226,3 +226,9 @@ Cache: `data/embeddings/gemini-embedding-001-768.json`. Model: `gemini-embedding
   TypeScript and diff checks passed. Real Chrome local human-denial workflow
   passed with BLOCK_CARD/L1 and CREATE_CASE/auto, graph=false, including reload.
 - Progress and subsequent verification are recorded in `docs/upgrade-log.md`.
+- GraphRAG controls now live in `agent/rag.py`, `agent/retrieval.py`,
+  `backend/rag.py` and `/rag`. `data/rag_config.json` is validated and frozen in
+  each answer/pause snapshot. Preview shares exact compact narration context and
+  has a read-only graph wrapper; it never calls narration or writes graph data.
+  252 tests and the full RAG browser workflow passed. A native MCP preview used
+  disclosed graph fallback while an operator ingestion held the embedding lock.

@@ -63,6 +63,16 @@ def test_success_uses_high_thinking_structured_json_and_counts_thoughts(sdk):
     assert "test-key" not in json.dumps(metrics)
 
 
+def test_preview_context_is_exact_sdk_user_content(sdk):
+    from agent.rag import context_packet
+    _, client = sdk
+    packet = context_packet(BRIEF, WORDS, ALLOWED)
+    asyncio.run(narrate()(BRIEF, WORDS, ALLOWED))
+    assert client.models.generate_content.call_args.kwargs["contents"] == packet["llm_context"]
+    assert packet["system_instruction"] == llm.SYSTEM_PROMPT
+    assert packet["estimated_tokens"] > 0
+
+
 def test_two_sdk_failures_fall_back_without_exposing_exception_text(sdk):
     _, client = sdk
     client.models.generate_content.side_effect = RuntimeError("secret-test-key in private request")

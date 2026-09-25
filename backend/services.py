@@ -54,16 +54,25 @@ class GraphGateway:
         self.local_only = os.getenv("FRAUDLOOP_LOCAL_ONLY", "0") == "1"
         self.health_cache = None
         self.health_checked = 0.0
+        self.gse_restart_attempted = False
+        self.write_warning = ""
 
     async def gse_for_write(self):
         if self.local_only:
             return False
         status = await docker_gadmin("gadmin status gse")
-        if status == "down":
+        if status == "down" and not self.gse_restart_attempted:
+            self.gse_restart_attempted = True
             logger.warning(json.dumps({"event": "gse_restart", "reason": "write_guard_detected_down"}))
             await docker_gadmin("gadmin restart gse -y")
             await asyncio.sleep(30)
             status = await docker_gadmin("gadmin status gse")
+        if status == "up":
+            self.gse_restart_attempted = False
+            self.write_warning = ""
+        else:
+            self.write_warning = "TigerGraph is unavailable. Live operations use local data and do not claim graph writes."
+            self.health_cache = None
         return status == "up"
 
     @asynccontextmanager
@@ -308,6 +317,7 @@ async def investigate_live(repo, gateway, case_id, emit, *, mode_evidence="simul
     from agent.answer import Answer, validate_answer
     from agent.investigate import investigate
     from agent.mcp_client import GraphClient
+    from agent.rag import load_config
     from agent.store import TransactionStore
 
     async with gateway.lock:
@@ -336,7 +346,8 @@ async def investigate_live(repo, gateway, case_id, emit, *, mode_evidence="simul
                 "warning": "Graph unavailable; investigation is using local data and will not claim a graph write." if local else None})
             answer, trace = await investigate(trigger, wrapped, narrator=budgeted_narrator(repo), emit=emit,
                 live=True, mode_evidence=mode_evidence, resume_state=resume_state, evidence_response=evidence_response,
-                validate_before_write=validate_candidate)
+                validate_before_write=validate_candidate,
+                rag_config=load_config(repo.data / "rag_config.json").model_dump() if resume_state is None else None)
             if wrapped.fallback is not None:
                 trace["backend"] = "local_after_graph_unavailable"
                 trace.setdefault("warnings", []).append("GSE became unavailable; remaining operations used the in-memory local fallback.")

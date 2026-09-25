@@ -32,3 +32,31 @@
   horizontal overflow at 375/768/1280 px. All 42 protected checksums match.
 - Baseline threaded tests stalled inside the restricted sandbox; the unchanged
   baseline (212 tests) and upgraded suite passed outside that restriction.
+
+## Features 2 and 3 — implementation
+
+- Feature 1 committed as `8a31e4b`. GraphRAG and stream work began only after the
+  human evidence workflow was green, with separate file ownership.
+- RAG controls use validated, immutable per-investigation settings, including
+  across human pause/resume. Preview and narration share a compact serializer.
+- Stream implementation is bounded to five transactions/second, ten pending
+  investigations and one active investigation. Repeated unavailable writes now
+  trigger at most one GSE restart per continuing outage.
+
+
+## Feature 2 — GraphRAG controls
+
+- Added validated RAG defaults/config endpoints, supervisor updates and the `/rag`
+  settings/playground. All controls affect retrieval; scores retain per-source
+  rank, weight, contribution, cosine score where available and graph-path basis.
+- Config is captured in answer metadata and the pending human assessment. Case
+  and free-text previews have explicit stages; no preview calls narration or
+  writes a case/vector. Shared serialization exposes the exact model context.
+- Verification: complete suite 252 passed; all 20 saved answers validate; frontend
+  build, TypeScript and diff checks passed. Browser checks verified settings and
+  actual top-k selection, case/free-text modes, tabs and role restrictions.
+- Browser review found and fixed a floated-legend overflow on narrow screens;
+  the corrected page fits 375/768/1280 px with no browser errors.
+- A real read-only MCP preview succeeded using graph/pattern/narrative evidence.
+  Vector search truthfully fell back because an operator ingestion holds the
+  embedding lock. No lock bypass, rebuild or additional ingestion was attempted.
