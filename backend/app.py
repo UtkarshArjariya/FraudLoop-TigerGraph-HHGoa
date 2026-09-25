@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend.data import Repository, atomic_json, read_json, utc_now
 from backend.services import GraphGateway, InvestigationManager
 from backend.rag import rag_router
+from backend.stream import StreamManager, stream_router
 
 logger = logging.getLogger("fraudloop.api")
 
@@ -110,12 +111,14 @@ def create_app(root: Path | str | None = None):
     manager = InvestigationManager(repo, gateway)
     approval_lock = asyncio.Lock()
     trigger_lock = asyncio.Lock()
+    stream = StreamManager(repo, gateway, manager, trigger_lock)
     memory_cache = {"at": 0, "value": None}
 
     @asynccontextmanager
     async def lifespan(app):
         await manager.restore_pending()
         yield
+        await stream.close()
         await manager.close()
 
     app = FastAPI(title="FRAUDLOOP", version="0.2.0", lifespan=lifespan,
@@ -124,6 +127,8 @@ def create_app(root: Path | str | None = None):
         allow_credentials=False, allow_methods=["GET", "POST", "PUT"], allow_headers=["Content-Type", "X-Role"])
     app.state.repository, app.state.gateway, app.state.manager = repo, gateway, manager
     app.include_router(rag_router(repo, gateway, manager))
+    app.include_router(stream_router(stream))
+    app.state.stream = stream
     app.state.trigger_lock = trigger_lock
 
     @app.middleware("http")

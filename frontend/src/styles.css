@@ -156,6 +156,7 @@ p {
   position: sticky;
   top: 0;
   z-index: 20;
+  min-width: 0;
 }
 .wordmark {
   display: flex;
@@ -219,6 +220,7 @@ p {
   height: calc(100vh - 64px);
   border-right: 1px solid var(--border);
   background: var(--bg);
+  min-width: 0;
 }
 .sidebar nav {
   display: grid;
@@ -781,7 +783,7 @@ tbody tr:hover {
 }
 @media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto 1fr;
   }
   .topbar {

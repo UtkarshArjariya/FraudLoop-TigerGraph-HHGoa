@@ -60,3 +60,25 @@
 - A real read-only MCP preview succeeded using graph/pattern/narrative evidence.
   Vector search truthfully fell back because an operator ingestion holds the
   embedding lock. No lock bypass, rebuild or additional ingestion was attempted.
+
+## Feature 3 — live detection
+
+- Added chunked, timestamp-ordered replay of the final two prepared-data months,
+  idempotent MCP entity/edge upserts and the transparent temporal detector.
+- The queue admits at most ten pending jobs and one global live investigation.
+  Healthy graph contention waits; outages disclose local fallback. Review fixed
+  a stop/dequeue race, same-timestamp testing evidence and reconnect event order.
+- Added `/live`, supervisor controls, exact UTC start time, bounded feed/alerts,
+  automatic case links, counters, threshold settings and optional human evidence.
+- Verification: 267 Python tests passed; all 20 saved answers validate; frontend
+  build/TypeScript, compilation, pip consistency and whitespace checks passed.
+- Native MCP smoke upserted existing transaction 3478782 (four vertices/four
+  edges) through the GSE guard. Its before/after Txn attributes were identical;
+  installed evidence queries completed. No case or embedding write was made.
+- Chrome exercised stream -> alert -> automatic human case -> L1 denial ->
+  validated final actions, then stopped the feed. Result: BLOCK_CARD/L1 and
+  CREATE_CASE/auto with the RAG snapshot preserved, graph=false in the isolated
+  local browser run. No browser errors or page overflow at 375/768/1280 px.
+- Demo UTC is 2016-11-22T17:27:07Z (the prepared transaction epoch), threshold
+  0.25 and speed 0.1. The case-pack opening text is a different timestamp; do not
+  substitute it for the stream cursor.

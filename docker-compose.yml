@@ -17,6 +17,7 @@ services:
     volumes:
       - ./HHGOA_IEEE:/app/HHGOA_IEEE:ro
       - ./cases:/app/cases:ro
+      - ./cases_live:/app/cases_live
       - ./data:/app/data
       - ./data/graph:/app/data/graph:ro
       - ./data/transaction_store.pkl:/app/data/transaction_store.pkl:ro

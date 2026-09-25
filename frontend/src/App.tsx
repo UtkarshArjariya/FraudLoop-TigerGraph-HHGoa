@@ -26,6 +26,7 @@ import CaseDetail from "./pages/CaseDetail";
 import Approvals from "./pages/Approvals";
 import Memory from "./pages/Memory";
 import GraphRAG from "./pages/GraphRAG";
+import LiveMonitor from "./pages/LiveMonitor";
 export const RoleContext = createContext<{
   role: Role;
   setRole: (value: Role) => void;
@@ -197,6 +198,10 @@ export default function App() {
               <SlidersHorizontal size={18} aria-hidden />
               GraphRAG
             </NavLink>
+            <NavLink to="/live">
+              <Activity size={18} aria-hidden />
+              Live monitor
+            </NavLink>
           </nav>
           <div className="sidebar-note">
             <ShieldCheck size={20} aria-hidden />
@@ -220,6 +225,7 @@ export default function App() {
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/memory" element={<Memory />} />
               <Route path="/rag" element={<GraphRAG />} />
+              <Route path="/live" element={<LiveMonitor />} />
               <Route
                 path="*"
                 element={

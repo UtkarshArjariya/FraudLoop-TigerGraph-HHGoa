@@ -232,3 +232,11 @@ Cache: `data/embeddings/gemini-embedding-001-768.json`. Model: `gemini-embedding
   has a read-only graph wrapper; it never calls narration or writes graph data.
   252 tests and the full RAG browser workflow passed. A native MCP preview used
   disclosed graph fallback while an operator ingestion held the embedding lock.
+- The live pipeline is implemented in `backend/stream.py`/`backend/detector.py`
+  with `/live`, MCP upserts, a five-TPS ceiling, one active investigation and ten
+  pending jobs. Pause/stop control the feed; stopping leaves persisted queued
+  cases for manual review and lets an active investigation continue.
+- Feature 3 verification: 267 tests and saved-answer validation pass. Native MCP
+  idempotent Txn/edge upserts preserved existing attributes. Real Chrome tested
+  stream -> alert -> human case -> denial -> final NBA using isolated local
+  outputs. Exact demo start is 2016-11-22T17:27:07Z, threshold0.25, speed0.1.
