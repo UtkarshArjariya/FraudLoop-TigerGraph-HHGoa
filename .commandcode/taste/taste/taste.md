@@ -15,7 +15,8 @@
 - Expects tests that mock external API failure modes (429 PerDay vs PerMinute, 503, missing key, cross-index write guards, ranking/fusion order) instead of exercising live services. Confidence: 0.85
 - On memory-constrained machines, reads large CSVs with `usecols`, explicit dtypes, and chunking — never loads all columns. Confidence: 0.8
 - Python 3.12 project venv, invoked as `.venv/bin/python -m scripts.<name>`; pytest for the test suite. Confidence: 0.7
-- Uses `main` as the canonical primary branch name (renamed from `master`); keep it that way for new repos and branch operations. Confidence: 0.75
+- Uses `main` as the canonical primary branch name (renamed from `master`); feature branches get merged back into `main`. Confidence: 0.8
+- Issues terse imperative follow-ups for routine repo steps ("merge it to main") and expects the full sequence handled end-to-end — verify clean state, integrate, delete the merged branch, then report the resulting commit — without clarifying questions; only push when a remote exists. Confidence: 0.6
 - Keeps the branch list tidy: once a feature/work branch is fully merged, delete it rather than leaving it around. Confidence: 0.65
 - Graph stack: TigerGraph CE in Docker (provisioning via `docker cp` + `gsql`), runtime graph access through tigergraph-mcp over stdio, Gemini via google-genai, pandas/pydantic/streamlit. Confidence: 0.7
 - Keeps a `docs/` set of publication artifacts (Medium blog draft plus publishing notes, LinkedIn/X social posts, video script) and asks for a refreshed version of the existing file rather than a fresh draft. Confidence: 0.7

@@ -1,110 +1,110 @@
 {
-  "voice_direction": "Warm, clear English product narration. Sound composed and conversational, with precise emphasis on evidence, changing recommendations and human review. Aim for 130–145 spoken words per minute, leaving a short natural pause at each scene boundary. Pronounce Fraud Loop as two words, TigerGraph as Tiger Graph, MCP as M C P, and GraphRAG as Graph Rag. Read percentages and approval levels naturally. Do not read scene identifiers or durations aloud.",
+  "voice_direction": "Warm, clear English product narration. Sound composed and conversational, with precise emphasis on evidence, changing recommendations and human review. Keep the measured spoken pace natural; the shortened script leaves a short scene-boundary pause. Pronounce Fraud Loop and Tiger Graph as two words, MCP as M C P, and GraphRAG as Graph Rag. Read percentages and approval levels naturally. Do not read scene identifiers or durations aloud.",
   "scenes": [
     {
       "id": "01-intro",
       "duration": 10,
-      "text": "Fraud Loop connects transaction evidence, historical cases and bank policy. Built around Tiger Graph and M C P, it makes investigations understandable and reviewable."
+      "text": "Fraud Loop investigates fraud alerts using Tiger Graph evidence, historical cases, explicit policy, and human review."
     },
     {
       "id": "02-queue",
       "duration": 16,
-      "text": "The queue brings verdicts and pending approvals together. Across twenty saved benchmark cases, nine are fraud, eight legitimate, and three uncertain. Two recommend suspicious activity reports. Every answer has passed validation."
+      "text": "The queue shows verdicts and approvals. Twenty saved cases include nine fraud, eight legitimate and three uncertain outcomes. Two recommend reports. All twenty have passed validation."
     },
     {
       "id": "03-case",
       "duration": 12,
-      "text": "Start with case fourteen: an analyst's request about a shared device profile. The saved case keeps its trigger, affected transactions, evidence and timeline together."
+      "text": "Case fourteen begins with a shared device alert. Its trigger, transactions, evidence and timeline stay together in one review."
     },
     {
       "id": "04-graph",
       "duration": 14,
-      "text": "This prepared-data graph connects twenty-six transactions across twenty card groups, with nearly thirty-eight hundred dollars in exposure. Nine groups still lack authoritative card identifiers and remain explicitly unresolved."
+      "text": "This local graph spans twenty-six transactions and twenty card groups. Exposure is nearly thirty-eight hundred dollars. Nine card identities remain unresolved."
     },
     {
       "id": "05-families",
       "duration": 10,
-      "text": "Correlated signals are capped within evidence families. Shared devices alone do not establish fraud. The displayed probability is an evidence heuristic."
+      "text": "Related signals are capped. Device sharing alone cannot prove fraud. This score is an evidence heuristic."
     },
     {
       "id": "06-precedents",
       "duration": 12,
-      "text": "Precedents show confirmed historical outcomes and the analysts' narratives. These saved answers predate detailed retrieval rankings, so the interface explicitly marks the unavailable provenance."
+      "text": "Read confirmed historical outcomes and analyst notes. These older saved answers label missing retrieval rankings rather than inventing them."
     },
     {
       "id": "07-l2",
       "duration": 14,
-      "text": "Policy recommends a card block and suspicious activity report, both requiring level two approval. Initial and final actions remain visible. No card was blocked or external report filed."
+      "text": "Here, policy recommends a card block and report, both requiring level two approval. Both sets of actions stay visible. No card was blocked or report filed."
     },
     {
       "id": "08-change",
       "duration": 16,
-      "text": "Verification can also clear an alert. In case two, simulated customer confirmation lowers suspicion from about forty-three percent to four percent. Monitoring gives way to closing the alert, with zero final exposure."
+      "text": "A simulated customer confirmation clears case two. Suspicion falls from about forty-three percent to four percent. The final recommendation closes the alert, with zero exposure."
     },
     {
       "id": "09-stream",
       "duration": 12,
-      "text": "Now the local simulator streams supplied historical transactions. A deliberately lowered threshold makes this example reproducible. The alert opens review; policy determines the outcome."
+      "text": "This local simulator streams historical transactions. A lowered demo threshold opens a review. The alert score does not decide fraud."
     },
     {
       "id": "10-alert",
       "duration": 10,
-      "text": "Each alert links to its case. The feed caps at five transactions per second, with one active investigation and ten waiting."
+      "text": "Each alert links to a case. The limits: five transactions per second, one active review and ten waiting."
     },
     {
       "id": "11-pause",
       "duration": 12,
-      "text": "When authorization remains unresolved, the investigation pauses and saves its assessment. The request explains what evidence is needed, while keeping its precedent basis visible."
+      "text": "When authorization is unclear, the agent saves its assessment and pauses. The request states what evidence is needed and why."
     },
     {
       "id": "12-response",
       "duration": 12,
-      "text": "Here, the demo analyst records a customer denial. The entry retains the selected level one role and timestamp. No real customer communication took place."
+      "text": "The demo analyst records a customer denial, with a level one role and timestamp. In this demo, no actual customer was contacted."
     },
     {
       "id": "13-resume",
       "duration": 14,
-      "text": "The denial changes the verdict from uncertain to fraud, raising suspicion from seventy point two to ninety-six percent. Case creation is automatic; a card block requires level one approval."
+      "text": "The denial changes uncertain to fraud: seventy point two to ninety-six percent. Case creation is automatic; blocking needs level one approval for this case."
     },
     {
       "id": "14-rag",
       "duration": 12,
-      "text": "Graph Rag controls index weights, precedent counts, graph depth, time windows and similarity cutoffs. Each investigation freezes its settings, including while waiting for human evidence."
+      "text": "Graph Rag controls index weights, time windows and evidence counts. Each case keeps its settings, even while waiting for human evidence."
     },
     {
       "id": "15-fusion",
       "duration": 12,
-      "text": "Rank fusion combines available vector indexes with graph, pattern and narrative matches. This local preview exposes actual source contributions without inventing unavailable vector scores."
+      "text": "Rank fusion blends available vector, graph and text matches. This local view shows each source's role; missing scores stay missing."
     },
     {
       "id": "16-context",
       "duration": 12,
-      "text": "Inspect the exact evidence brief prepared for narration. Policy code owns verdicts and actions. This preview calls no language model; the recorded investigation used templates."
+      "text": "Inspect the exact evidence brief. Policy owns the verdict and actions. This preview calls no language model; the demo used templates."
     },
     {
       "id": "17-approvals",
       "duration": 12,
-      "text": "Reviewers see controls for their selected level, with decisions retained in an audit trail. These demo roles illustrate approval boundaries; they are not authentication."
+      "text": "Viewers inspect; reviewers see their allowed controls. Decisions have an audit trail. These local demo roles are not bank authentication."
     },
     {
       "id": "18-memory",
       "duration": 10,
-      "text": "Confirmed history stays distinct from agent conclusions, which can contain simulated replies. Retrieval respects each case's opening time to avoid future evidence."
+      "text": "Bank history stays apart from agent memory. Each case uses only earlier evidence, so future facts stay out."
     },
     {
       "id": "19-data",
       "duration": 10,
-      "text": "Data imports start with preview and require supervisor approval. Transaction rows must match the supplied dataset; local uploads remain staged for later ingestion."
+      "text": "Preview before supervisor commit. Rows must match known data. Local uploads stay staged. We uploaded nothing here."
     },
     {
       "id": "20-proof",
       "duration": 10,
-      "text": "All twenty answers passed schema, identity, exposure, chronology, route and policy checks. These validated outputs are not an accuracy claim against hidden answers."
+      "text": "Twenty answers pass checks for IDs, totals, timing, routes and policy. This verifies valid answers, not accuracy."
     },
     {
       "id": "21-close",
       "duration": 8,
-      "text": "Fraud Loop: evidence first, every decision reviewable. Explore the queue, replay a case, and inspect the recommendations."
+      "text": "Fraud Loop: evidence first. Every decision reviewable. Explore the queue and see why."
     }
   ]
 }
