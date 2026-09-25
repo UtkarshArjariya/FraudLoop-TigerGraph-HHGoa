@@ -11,6 +11,7 @@ import {
 } from "../components";
 import type { MemoryStats, VectorIndex } from "../types";
 import "./secondary.css";
+import PatternDiscovery from "./PatternDiscovery";
 
 interface CheckpointIndex extends VectorIndex {
   closed_case_vectors?: number;
@@ -387,6 +388,7 @@ export default function Memory() {
               <RecurringOrigins kind="device" groups={data.recurring_devices} />
               <RecurringOrigins kind="region" groups={data.recurring_regions} />
             </div>
+            <PatternDiscovery />
           </>
         )
       )}

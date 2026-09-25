@@ -102,3 +102,20 @@
   and supervisor local staging, viewer denial and altered-amount rejection.
   Data fits 375/768/1280 px, with no browser errors. Native policy writes were
   not attempted; the operator's ingestion job and checkpoint files are untouched.
+
+## Feature 5 — pattern discovery
+
+- Added Memory discovery, native read-only tg_wcc aggregates and explicitly
+  labeled windowed prepared components. Results require mixed customers and no
+  linked confirmed documented typology by the component's review timestamp.
+- Open R9 review recomputes the candidate and anchors an actual component
+  transaction, even when its card has a later transaction without that device.
+  It queues an analyst request; it never forces a pattern, verdict or SAR.
+- Nine feature tests and the 286-test integration suite passed. Native MCP WCC
+  converged across 13,831 vertices into 4,954 components. Prepared 30-day
+  discovery returned 56 components/3,816 edges, one excluded documented group
+  and zero qualifying candidates. The native query exposes no memberships;
+  its aggregate counts are not presented as windowed component results.
+- Chrome verified the authentic empty result, provenance and responsive Memory
+  view without errors. No schema changes, graph writes, embeddings or fabricated
+  pattern examples were needed. Native evidence is in upgrade-verification.json.

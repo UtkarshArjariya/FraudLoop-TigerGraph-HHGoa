@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend.data import Repository, atomic_json, read_json, utc_now
 from backend.services import GraphGateway, InvestigationManager
 from backend.rag import rag_router
+from backend.patterns import patterns_router
 from backend.stream import StreamManager, stream_router
 from backend.ingest import IngestService, ingest_router
 
@@ -128,6 +129,7 @@ def create_app(root: Path | str | None = None):
         allow_credentials=False, allow_methods=["GET", "POST", "PUT"], allow_headers=["Content-Type", "X-Role"])
     app.state.repository, app.state.gateway, app.state.manager = repo, gateway, manager
     app.include_router(rag_router(repo, gateway, manager))
+    app.include_router(patterns_router(repo, gateway, trigger_lock))
     app.include_router(stream_router(stream))
     app.state.ingest = IngestService(repo, gateway)
     app.include_router(ingest_router(app.state.ingest))

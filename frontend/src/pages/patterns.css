@@ -1,0 +1,204 @@
+.pattern-discovery {
+  margin-top: 24px;
+}
+.pattern-discovery h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pattern-discovery h2 > svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.pattern-discovery-form {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 20px;
+}
+.pattern-discovery-form label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  font-size: 12px;
+}
+.pattern-discovery-form input {
+  grid-column: 1/-1;
+  width: 150px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  background: var(--bg);
+}
+.pattern-discovery-form > p {
+  max-width: 63ch;
+  margin-left: auto;
+  font-size: 11px;
+}
+.pattern-error {
+  margin: 0 20px 16px;
+}
+.pattern-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding: 12px 20px;
+  border-block: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 11px;
+  color: var(--muted);
+}
+.pattern-provenance {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.pattern-disclosure {
+  padding: 14px 20px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pattern-warnings {
+  padding: 12px 20px;
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 12px;
+}
+.pattern-warnings p + p {
+  margin-top: 5px;
+}
+.pattern-components {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.pattern-component {
+  padding: 20px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.pattern-component:nth-child(odd) {
+  border-right: 1px solid var(--border);
+}
+.pattern-component-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.pattern-component-heading h3 {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.pattern-component-heading p {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.pattern-component-heading .button {
+  font-size: 12px;
+}
+.pattern-anchor {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 14px;
+  overflow-wrap: anywhere;
+}
+.pattern-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+.pattern-cards > span {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.pattern-entities {
+  margin-top: 14px;
+}
+.pattern-entities summary,
+.pattern-native summary {
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+}
+.pattern-entities dl {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 10px;
+  font-size: 11px;
+  margin-top: 12px;
+}
+.pattern-entities dt {
+  color: var(--muted);
+}
+.pattern-entities dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pattern-component > .helper {
+  margin-top: 14px;
+  font-size: 11px;
+}
+.pattern-native {
+  border-top: 1px solid var(--border);
+  padding: 16px 20px;
+}
+.pattern-native pre {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  max-height: 400px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pattern-native .helper {
+  margin-top: 10px;
+}
+@media (max-width: 1100px) {
+  .pattern-components {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pattern-component:nth-child(odd) {
+    border-right: 0;
+  }
+  .pattern-discovery-form > p {
+    margin-left: 0;
+    flex-basis: 100%;
+    max-width: none;
+  }
+}
+@media (max-width: 550px) {
+  .pattern-discovery-form,
+  .pattern-component {
+    padding: 16px;
+  }
+  .pattern-discovery-form {
+    gap: 12px;
+  }
+  .pattern-discovery-form input {
+    width: 135px;
+  }
+  .pattern-discovery-form .button {
+    font-size: 12px;
+    padding-inline: 9px;
+  }
+  .pattern-result-meta,
+  .pattern-disclosure,
+  .pattern-warnings,
+  .pattern-native {
+    padding-inline: 16px;
+  }
+}
