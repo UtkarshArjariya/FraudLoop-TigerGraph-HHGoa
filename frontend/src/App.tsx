@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Sun,
   SlidersHorizontal,
+  Upload,
   Workflow,
 } from "lucide-react";
 import { activeRole, api, setApiRole } from "./api";
@@ -27,6 +28,7 @@ import Approvals from "./pages/Approvals";
 import Memory from "./pages/Memory";
 import GraphRAG from "./pages/GraphRAG";
 import LiveMonitor from "./pages/LiveMonitor";
+import Data from "./pages/Data";
 export const RoleContext = createContext<{
   role: Role;
   setRole: (value: Role) => void;
@@ -202,6 +204,10 @@ export default function App() {
               <Activity size={18} aria-hidden />
               Live monitor
             </NavLink>
+            <NavLink to="/data">
+              <Upload size={18} aria-hidden />
+              Data
+            </NavLink>
           </nav>
           <div className="sidebar-note">
             <ShieldCheck size={20} aria-hidden />
@@ -226,6 +232,7 @@ export default function App() {
               <Route path="/memory" element={<Memory />} />
               <Route path="/rag" element={<GraphRAG />} />
               <Route path="/live" element={<LiveMonitor />} />
+              <Route path="/data" element={<Data />} />
               <Route
                 path="*"
                 element={

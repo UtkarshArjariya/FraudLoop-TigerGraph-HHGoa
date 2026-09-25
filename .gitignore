@@ -39,3 +39,4 @@ cases_live/
 data/timelines_live/
 data/pending_evidence.json
 data/pending_evidence.lock
+data/ingestion/

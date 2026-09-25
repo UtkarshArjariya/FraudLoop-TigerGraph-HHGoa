@@ -82,3 +82,23 @@
 - Demo UTC is 2016-11-22T17:27:07Z (the prepared transaction epoch), threshold
   0.25 and speed 0.1. The case-pack opening text is a different timestamp; do not
   substitute it for the stream cursor.
+
+## Feature 4 — previewed ingestion
+
+- Core features were green and committed before stretch work started. Added
+  `/data` and transaction/policy preview/commit endpoints, exact-content binding,
+  supervisor permissions, bounded uploads and durable per-item receipts.
+- Transaction rows must match authoritative prepared IDs and supplied values.
+  Policy chunks use cached BGE and the existing emb_bge ownership/lock through
+  MCP. Local staging never claims graph/vector writes or downloads weights.
+- Review caught and fixed a partial-retry receipt loss across a GSE outage.
+  A real cache-only probe found no usable BGE weights; that condition now stages
+  uploads with an actionable cache/path message and preserves earlier writes.
+- Final integration suite: 286 tests passed in 6.24s; all 20 saved answers
+  validate; build, TypeScript, pip consistency and diff checks passed. Ten
+  ingestion tests cover validation, identity, roles, locks, checkpoint ordering,
+  missing cache and failure/retry preservation.
+- Chrome verified canonical CSV and synthetic reference uploads through preview
+  and supervisor local staging, viewer denial and altered-amount rejection.
+  Data fits 375/768/1280 px, with no browser errors. Native policy writes were
+  not attempted; the operator's ingestion job and checkpoint files are untouched.
